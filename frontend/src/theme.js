@@ -1,0 +1,21 @@
+// ─── Design Tokens ───────────────────────────────────────────────
+export const C = {
+  navy:    "#1B2B4B",
+  navyMid: "#243656",
+  accent:  "#3D7EFF",
+  accentL: "#EBF1FF",
+  green:   "#22C55E",
+  greenL:  "#DCFCE7",
+  amber:   "#F59E0B",
+  amberL:  "#FEF3C7",
+  red:     "#EF4444",
+  redL:    "#FEE2E2",
+  slate:   "#64748B",
+  slateL:  "#F1F5F9",
+  white:   "#FFFFFF",
+  border:  "#E2E8F0",
+  text:    "#0F172A",
+  textMid: "#475569",
+  purple:  "#A855F7",
+  purpleL: "#F5F3FF",
+};

@@ -1,0 +1,303 @@
+// ════════════════════════════════════════════════════════════════
+// SchoolHub ERP — Database Schema
+// ════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+  TRANSFERRED
+}
+
+enum TeacherStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum FeeStatus {
+  PAID
+  PENDING
+  OVERDUE
+}
+
+enum AnnouncementType {
+  ACADEMIC
+  EVENT
+  ADMIN
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+// ─── Core Identity ──────────────────────────────────────────────
+
+// One login account. Linked optionally to a Teacher, Student, or
+// used as a Guardian (Parent) account linked to one or more students.
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // bcrypt hash
+  name      String
+  role      Role
+  phone     String?
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teacher          Teacher?
+  studentsAsGuardian Student[] @relation("GuardianStudents")
+  announcements    Announcement[] @relation("AnnouncementAuthor")
+  attendanceMarks  Attendance[]   @relation("AttendanceMarkedBy")
+
+  @@map("users")
+}
+
+// ─── Academic Structure ─────────────────────────────────────────
+
+// e.g. "Grade 9", "Grade 10"
+model GradeLevel {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique // "Grade 9"
+  order    Int       // for sorting: 9, 10, 11...
+  sections Section[]
+
+  @@map("grade_levels")
+}
+
+// e.g. Section "A" of Grade 9
+model Section {
+  id           Int        @id @default(autoincrement())
+  name         String     // "A", "B", "C"
+  gradeLevelId Int
+  gradeLevel   GradeLevel @relation(fields: [gradeLevelId], references: [id])
+
+  students        Student[]
+  timetableEntries TimetableEntry[]
+
+  @@unique([gradeLevelId, name])
+  @@map("sections")
+}
+
+// e.g. "Mathematics", "Physics"
+model Subject {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  code  String? @unique // e.g. "MATH101"
+  color String? // hex color used for UI (timetable, charts)
+
+  teacherSubjects TeacherSubject[]
+  timetableEntries TimetableEntry[]
+  gradeRecords     GradeRecord[]
+
+  @@map("subjects")
+}
+
+// ─── People ─────────────────────────────────────────────────────
+
+model Student {
+  id             Int           @id @default(autoincrement())
+  studentCode    String        @unique // e.g. "STU-2026-001"
+  name           String
+  dateOfBirth    DateTime?
+  enrollmentDate DateTime      @default(now())
+  status         StudentStatus @default(ACTIVE)
+
+  // Guardian contact info (stored directly for quick access)
+  guardianName   String?       // e.g. "Hassan Khalil"
+  guardianPhone  String?       // e.g. "+96171234567" (international format for WhatsApp)
+
+  sectionId Int
+  section   Section @relation(fields: [sectionId], references: [id])
+
+  guardianId Int?
+  guardian   User?   @relation("GuardianStudents", fields: [guardianId], references: [id])
+
+  attendances   Attendance[]
+  gradeRecords  GradeRecord[]
+  feeInvoices   FeeInvoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("students")
+}
+
+model Teacher {
+  id     Int           @id @default(autoincrement())
+  userId Int           @unique
+  user   User          @relation(fields: [userId], references: [id])
+  status TeacherStatus @default(ACTIVE)
+
+  subjects         TeacherSubject[]
+  timetableEntries TimetableEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("teachers")
+}
+
+// Many-to-many: which subjects + sections a teacher is assigned to
+model TeacherSubject {
+  id        Int     @id @default(autoincrement())
+  teacherId Int
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+  subjectId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([teacherId, subjectId])
+  @@map("teacher_subjects")
+}
+
+// ─── Attendance ─────────────────────────────────────────────────
+
+model Attendance {
+  id        Int              @id @default(autoincrement())
+  studentId Int
+  student   Student          @relation(fields: [studentId], references: [id])
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+
+  markedById Int?
+  markedBy   User? @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, date]) // one record per student per day
+  @@index([date])
+  @@map("attendance")
+}
+
+// ─── Grades / Exams ─────────────────────────────────────────────
+
+model GradeRecord {
+  id        Int     @id @default(autoincrement())
+  studentId Int
+  student   Student @relation(fields: [studentId], references: [id])
+  subjectId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  term  String // e.g. "Term 1", "Term 2", "Final"
+  score Float  // 0-100
+  maxScore Float @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, subjectId, term])
+  @@map("grade_records")
+}
+
+// ─── Fees / Finance ─────────────────────────────────────────────
+
+model FeeInvoice {
+  id        Int       @id @default(autoincrement())
+  studentId Int
+  student   Student   @relation(fields: [studentId], references: [id])
+
+  description    String    // e.g. "Term 2 Tuition"
+  amount         Decimal   @db.Decimal(10, 2)  // total amount due
+  dueDate        DateTime  @db.Date
+  status         FeeStatus @default(PENDING)   // auto-updated based on payments
+  totalPaid      Decimal   @default(0) @db.Decimal(10, 2) // running sum of payments
+
+  payments  Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("fee_invoices")
+}
+
+// Each row = one installment/payment against a FeeInvoice
+model Payment {
+  id          Int        @id @default(autoincrement())
+  invoiceId   Int
+  invoice     FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount      Decimal  @db.Decimal(10, 2)
+  paidDate    DateTime @default(now()) @db.Date
+  note        String?  // e.g. "Cash", "Bank transfer", "OMT"
+
+  createdAt DateTime @default(now())
+
+  @@map("payments")
+}
+
+// ─── Timetable ──────────────────────────────────────────────────
+
+model TimetableEntry {
+  id        Int     @id @default(autoincrement())
+  sectionId Int
+  section   Section @relation(fields: [sectionId], references: [id])
+  subjectId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  teacherId Int?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+
+  day       Weekday
+  startTime String  // "07:30"
+  endTime   String  // "08:15"
+
+  @@unique([sectionId, day, startTime])
+  @@map("timetable_entries")
+}
+
+// ─── Announcements ──────────────────────────────────────────────
+
+model Announcement {
+  id       Int              @id @default(autoincrement())
+  title    String
+  body     String?
+  type     AnnouncementType @default(ACADEMIC)
+  priority Priority         @default(MEDIUM)
+
+  authorId Int?
+  author   User?   @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("announcements")
+}

@@ -1,0 +1,118 @@
+const prisma = require("../config/db");
+
+// GET /api/sections
+// Returns all sections with their grade level, for use in dropdowns
+// e.g. "Grade 9 - A"
+async function getSections(req, res) {
+  try {
+    const sections = await prisma.section.findMany({
+      include: { gradeLevel: true, _count: { select: { students: true } } },
+      orderBy: [
+        { gradeLevel: { order: "asc" } },
+        { name: "asc" },
+      ],
+    });
+
+    res.json(sections);
+  } catch (err) {
+    console.error("getSections error:", err);
+    res.status(500).json({ error: "Failed to fetch sections" });
+  }
+}
+
+// GET /api/sections/grade-levels
+// Returns all grade levels (for dropdowns when adding a section)
+async function getGradeLevels(req, res) {
+  try {
+    const grades = await prisma.gradeLevel.findMany({ orderBy: { order: "asc" } });
+    res.json(grades);
+  } catch (err) {
+    console.error("getGradeLevels error:", err);
+    res.status(500).json({ error: "Failed to fetch grade levels" });
+  }
+}
+
+// POST /api/sections
+// Body: { gradeName, gradeOrder?, sectionName }
+// Creates the GradeLevel if it doesn't exist yet, then creates the Section.
+async function createSection(req, res) {
+  try {
+    const { gradeName, gradeOrder, sectionName } = req.body;
+
+    if (!gradeName || !sectionName) {
+      return res.status(400).json({ error: "gradeName and sectionName are required" });
+    }
+
+    const trimmedGrade   = String(gradeName).trim();
+    const trimmedSection = String(sectionName).trim();
+
+    // Find or create the grade level
+    let grade = await prisma.gradeLevel.findUnique({ where: { name: trimmedGrade } });
+    if (!grade) {
+      // Determine order: use provided value, or derive from any number in the name, or push to end
+      let order = Number(gradeOrder);
+      if (!order || isNaN(order)) {
+        const match = trimmedGrade.match(/\d+/);
+        if (match) {
+          order = Number(match[0]);
+        } else {
+          const maxOrder = await prisma.gradeLevel.aggregate({ _max: { order: true } });
+          order = (maxOrder._max.order || 0) + 1;
+        }
+      }
+      grade = await prisma.gradeLevel.create({ data: { name: trimmedGrade, order } });
+    }
+
+    // Check section doesn't already exist for this grade
+    const existing = await prisma.section.findUnique({
+      where: { gradeLevelId_name: { gradeLevelId: grade.id, name: trimmedSection } },
+    });
+    if (existing) {
+      return res.status(409).json({ error: `Section "${trimmedGrade} - ${trimmedSection}" already exists` });
+    }
+
+    const section = await prisma.section.create({
+      data: { name: trimmedSection, gradeLevelId: grade.id },
+      include: { gradeLevel: true },
+    });
+
+    res.status(201).json(section);
+  } catch (err) {
+    console.error("createSection error:", err);
+    res.status(500).json({ error: "Failed to create section" });
+  }
+}
+
+// DELETE /api/sections/:id
+// Only allowed if the section has no students enrolled.
+async function deleteSection(req, res) {
+  try {
+    const id = Number(req.params.id);
+
+    const studentCount = await prisma.student.count({ where: { sectionId: id } });
+    if (studentCount > 0) {
+      return res.status(400).json({ error: `Cannot delete: ${studentCount} student(s) are enrolled in this section` });
+    }
+
+    await prisma.section.delete({ where: { id } });
+    res.status(204).send();
+  } catch (err) {
+    console.error("deleteSection error:", err);
+    if (err.code === "P2025") return res.status(404).json({ error: "Section not found" });
+    res.status(500).json({ error: "Failed to delete section" });
+  }
+}
+
+// GET /api/sections/subjects
+// Returns all subjects (for dropdowns in Grades, Timetable, etc.)
+async function getSubjects(req, res) {
+  try {
+    const subjects = await prisma.subject.findMany({ orderBy: { name: "asc" } });
+    res.json(subjects);
+  } catch (err) {
+    console.error("getSubjects error:", err);
+    res.status(500).json({ error: "Failed to fetch subjects" });
+  }
+}
+
+module.exports = { getSections, getGradeLevels, createSection, deleteSection, getSubjects };

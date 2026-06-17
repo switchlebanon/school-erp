@@ -12,9 +12,9 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get("/terms",         getTerms);
-router.get("/class-summary", getClassSummary);
+router.get("/class-summary", authorize("ADMIN", "TEACHER"), getClassSummary);
 router.get("/student/:studentId", getStudentGrades);
-router.get("/",              getGradesForClass);
+router.get("/",              authorize("ADMIN", "TEACHER"), getGradesForClass);
 
 // Only Admins/Teachers can save grades
 router.post("/bulk", authorize("ADMIN", "TEACHER"), saveGradesBulk);

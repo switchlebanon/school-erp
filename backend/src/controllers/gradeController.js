@@ -123,10 +123,18 @@ async function saveGradesBulk(req, res) {
 }
 
 // GET /api/grades/student/:studentId
-// Returns all grade records for a student, across subjects/terms
+// Returns all grade records for a student, across subjects/terms.
+// PARENT/STUDENT can only view their own linked student's grades.
 async function getStudentGrades(req, res) {
   try {
     const studentId = Number(req.params.studentId);
+
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      const student = await prisma.student.findUnique({ where: { id: studentId } });
+      if (!student || student.guardianId !== req.user.id) {
+        return res.status(403).json({ error: "You don't have access to this student's grades" });
+      }
+    }
 
     const records = await prisma.gradeRecord.findMany({
       where: { studentId },

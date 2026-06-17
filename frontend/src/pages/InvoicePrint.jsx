@@ -92,7 +92,7 @@ function buildInvoiceHTML(invoice) {
       <div style="width:48px;height:48px;border-radius:12px;background:#3D7EFF;
                   display:flex;align-items:center;justify-content:center;font-size:24px">🏫</div>
       <div>
-        <div style="font-weight:800;font-size:20px;color:#1B2B4B;line-height:1.2">SchoolHub</div>
+        <div style="font-weight:800;font-size:20px;color:#1B2B4B;line-height:1.2">S³</div>
         <div style="font-size:12px;color:#64748B">ERP System</div>
       </div>
     </div>
@@ -166,7 +166,7 @@ function buildInvoiceHTML(invoice) {
     <div>Thank you for your payment. Please keep this receipt for your records.</div>
     <div>For inquiries, contact the school administration office.</div>
     <div style="margin-top:4px;font-weight:600;color:#475569">
-      SchoolHub ERP &nbsp;·&nbsp; Printed ${fmtDate(new Date())}
+      S³ ERP &nbsp;·&nbsp; Printed ${fmtDate(new Date())}
     </div>
   </div>
 
@@ -195,7 +195,7 @@ export default function InvoicePrint({ invoice, onClose }) {
 
   return (
     <div
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -219,7 +219,7 @@ export default function InvoicePrint({ invoice, onClose }) {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: "#3D7EFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏫</div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: "#1B2B4B" }}>SchoolHub</div>
+                <div style={{ fontWeight: 800, fontSize: 18, color: "#1B2B4B" }}>S³</div>
                 <div style={{ fontSize: 11, color: "#64748B" }}>ERP System</div>
               </div>
             </div>
@@ -310,7 +310,7 @@ export default function InvoicePrint({ invoice, onClose }) {
           {/* Footer */}
           <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 12, fontSize: 11, color: "#64748B", textAlign: "center", lineHeight: 1.8 }}>
             <div>Thank you for your payment. Please keep this receipt for your records.</div>
-            <div>SchoolHub ERP · Printed {fmtDate(new Date())}</div>
+            <div>S³ ERP · Printed {fmtDate(new Date())}</div>
           </div>
         </div>
 

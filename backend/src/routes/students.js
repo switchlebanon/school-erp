@@ -6,6 +6,9 @@ const {
   updateStudent,
   deleteStudent,
   bulkImportStudents,
+  getStudentAccount,
+  createAccountForStudent,
+  resetStudentPassword,
 } = require("../controllers/studentController");
 const { authenticate, authorize } = require("../middleware/auth");
 
@@ -22,5 +25,10 @@ router.post("/", authorize("ADMIN"), createStudent);
 router.post("/bulk", authorize("ADMIN"), bulkImportStudents);
 router.put("/:id", authorize("ADMIN"), updateStudent);
 router.delete("/:id", authorize("ADMIN"), deleteStudent);
+
+// Student login account management (Admin only)
+router.get("/:id/account",                    authorize("ADMIN"), getStudentAccount);
+router.post("/:id/account",                   authorize("ADMIN"), createAccountForStudent);
+router.post("/:id/account/reset-password",    authorize("ADMIN"), resetStudentPassword);
 
 module.exports = router;

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#1B2B4B"/>
+
+  <!-- S letter -->
+  <text
+    x="180"
+    y="330"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="260"
+    fill="#FFFFFF"
+    letter-spacing="-10"
+  >S</text>
+
+  <!-- Superscript 3 -->
+  <text
+    x="348"
+    y="210"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="140"
+    fill="#3D7EFF"
+  >3</text>
+
+  <!-- Accent line -->
+  <rect x="64" y="400" width="384" height="16" rx="8" fill="#3D7EFF" opacity="0.6"/>
+</svg>

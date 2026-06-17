@@ -96,4 +96,66 @@ async function me(req, res) {
   }
 }
 
-module.exports = { register, login, me };
+// PUT /api/auth/me
+// Update own profile: name and phone
+async function updateProfile(req, res) {
+  try {
+    const { name, phone } = req.body;
+
+    const data = {};
+    if (name !== undefined) {
+      if (!String(name).trim()) return res.status(400).json({ error: "Name cannot be empty" });
+      data.name = String(name).trim();
+    }
+    if (phone !== undefined) {
+      data.phone = phone ? String(phone).trim() : null;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data,
+      select: { id: true, email: true, name: true, role: true, phone: true, avatarUrl: true },
+    });
+
+    res.json(user);
+  } catch (err) {
+    console.error("updateProfile error:", err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+}
+
+// POST /api/auth/change-password
+// Body: { currentPassword, newPassword }
+async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "currentPassword and newPassword are required" });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("changePassword error:", err);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+}
+
+module.exports = { register, login, me, updateProfile, changePassword };

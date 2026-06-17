@@ -1,7 +1,57 @@
 const prisma = require("../config/db");
+const bcrypt = require("bcryptjs");
+
+// ── Auto-generated student login credentials ──────────────────────
+
+// Generates a readable random password, e.g. "kx7-mP2q-9wTr"
+function generateStudentPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let pw = "";
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
+// Builds a login email from a student code, e.g. "STU-2026-007" -> "stu-2026-007@students.scube.local"
+function studentEmailFromCode(studentCode) {
+  const slug = String(studentCode).trim().toLowerCase().replace(/[^a-z0-9]/g, "-");
+  return `${slug}@students.scube.local`;
+}
+
+/**
+ * Creates a STUDENT-role user account for a given student record.
+ * Returns { id, email, password } (plaintext password included once,
+ * for the admin to share — it is NOT stored anywhere in plaintext).
+ * If an account with this email already exists, returns null (skip).
+ */
+async function createStudentAccount(student) {
+  const email = studentEmailFromCode(student.studentCode);
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return null;
+
+  const plainPassword = generateStudentPassword();
+  const hashed = await bcrypt.hash(plainPassword, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      password: hashed,
+      name: student.name,
+      role: "STUDENT",
+    },
+  });
+
+  await prisma.student.update({
+    where: { id: student.id },
+    data: { userId: user.id },
+  });
+
+  return { id: user.id, email, password: plainPassword };
+}
 
 // GET /api/students
 // Supports optional query params: ?search=&gradeId=&sectionId=&status=
+// PARENT/STUDENT roles are scoped to only their own linked student record(s).
 async function getStudents(req, res) {
   try {
     const { search, sectionId, status } = req.query;
@@ -14,6 +64,11 @@ async function getStudents(req, res) {
         { name: { contains: search, mode: "insensitive" } },
         { studentCode: { contains: search, mode: "insensitive" } },
       ];
+    }
+
+    // Scope for non-staff roles
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      where.guardianId = req.user.id;
     }
 
     const students = await prisma.student.findMany({
@@ -33,6 +88,7 @@ async function getStudents(req, res) {
 }
 
 // GET /api/students/:id
+// PARENT/STUDENT can only access their own linked student record(s).
 async function getStudentById(req, res) {
   try {
     const id = Number(req.params.id);
@@ -52,6 +108,14 @@ async function getStudentById(req, res) {
     });
 
     if (!student) return res.status(404).json({ error: "Student not found" });
+
+    // Scope check for non-staff roles
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      if (student.guardianId !== req.user.id) {
+        return res.status(403).json({ error: "You don't have access to this student" });
+      }
+    }
+
     res.json(student);
   } catch (err) {
     console.error("getStudentById error:", err);
@@ -82,7 +146,10 @@ async function createStudent(req, res) {
       include: { section: { include: { gradeLevel: true } } },
     });
 
-    res.status(201).json(student);
+    // Auto-create a STUDENT login account for this student
+    const account = await createStudentAccount(student);
+
+    res.status(201).json({ ...student, account });
   } catch (err) {
     console.error("createStudent error:", err);
     if (err.code === "P2002") {
@@ -210,7 +277,10 @@ async function bulkImportStudents(req, res) {
           },
         });
 
-        results.push({ row: rowNum, status: "created", student: created });
+        // Auto-create a STUDENT login account for this student
+        const account = await createStudentAccount(created);
+
+        results.push({ row: rowNum, status: "created", student: created, account });
       } catch (err) {
         console.error(`bulkImportStudents row ${rowNum} error:`, err);
         results.push({ row: rowNum, status: "error", error: err.message || "Unknown error", data: row });
@@ -231,6 +301,75 @@ async function bulkImportStudents(req, res) {
   }
 }
 
+// GET /api/students/:id/account
+// Admin: returns the student's login email (if an account exists)
+async function getStudentAccount(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, email: true, isActive: true } } },
+    });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+
+    if (!student.user) {
+      return res.json({ exists: false });
+    }
+    res.json({ exists: true, email: student.user.email, isActive: student.user.isActive, userId: student.user.id });
+  } catch (err) {
+    console.error("getStudentAccount error:", err);
+    res.status(500).json({ error: "Failed to fetch student account" });
+  }
+}
+
+// POST /api/students/:id/account
+// Admin: create a login account for this student if one doesn't exist yet
+async function createAccountForStudent(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+
+    if (student.userId) {
+      return res.status(409).json({ error: "This student already has a login account" });
+    }
+
+    const account = await createStudentAccount(student);
+    if (!account) {
+      return res.status(409).json({ error: "An account with this email already exists" });
+    }
+
+    res.status(201).json(account);
+  } catch (err) {
+    console.error("createAccountForStudent error:", err);
+    res.status(500).json({ error: "Failed to create student account" });
+  }
+}
+
+// POST /api/students/:id/account/reset-password
+// Admin: generate a new password for this student's account
+async function resetStudentPassword(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+    if (!student.userId) return res.status(404).json({ error: "This student has no login account yet" });
+
+    const plainPassword = generateStudentPassword();
+    const hashed = await bcrypt.hash(plainPassword, 10);
+
+    await prisma.user.update({
+      where: { id: student.userId },
+      data: { password: hashed },
+    });
+
+    res.json({ password: plainPassword });
+  } catch (err) {
+    console.error("resetStudentPassword error:", err);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+}
+
 module.exports = {
   getStudents,
   getStudentById,
@@ -238,4 +377,9 @@ module.exports = {
   updateStudent,
   deleteStudent,
   bulkImportStudents,
+  createStudentAccount,
+  studentEmailFromCode,
+  getStudentAccount,
+  createAccountForStudent,
+  resetStudentPassword,
 };

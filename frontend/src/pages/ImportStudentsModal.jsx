@@ -173,7 +173,7 @@ export default function ImportStudentsModal({ onClose, onDone }) {
 
   // ── Render ────────────────────────────────────────────────────
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
       display: "flex", alignItems: "center", justifyContent: "center",
       zIndex: 200, padding: 16,
@@ -438,6 +438,64 @@ export default function ImportStudentsModal({ onClose, onDone }) {
                         </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Student login credentials */}
+              {importResult.results.some(r => r.status === "created" && r.account) && (
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: C.accentL, padding: "8px 12px",
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      🔑 Student Login Credentials
+                    </span>
+                    <button
+                      onClick={() => {
+                        const created = importResult.results.filter(r => r.status === "created" && r.account);
+                        const csv = ["Name,Student Code,Email,Password", ...created.map(r =>
+                          `"${r.student.name}","${r.student.studentCode}","${r.account.email}","${r.account.password}"`
+                        )].join("\n");
+                        const blob = new Blob([csv], { type: "text/csv" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "student-logins.csv";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{
+                        background: C.accent, color: C.white, border: "none", borderRadius: 6,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      ⬇ Download CSV
+                    </button>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: C.slateL }}>
+                          {["Name", "Email", "Password"].map(h => (
+                            <th key={h} style={{ padding: "6px 12px", textAlign: "left", color: C.slate, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.results.filter(r => r.status === "created" && r.account).map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                            <td style={{ padding: "6px 12px", fontWeight: 600 }}>{r.student.name}</td>
+                            <td style={{ padding: "6px 12px", fontFamily: "monospace" }}>{r.account.email}</td>
+                            <td style={{ padding: "6px 12px", fontFamily: "monospace" }}>{r.account.password}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMid, padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
+                    Download this list now — passwords won't be shown again. Students can change their password later in My Account.
                   </div>
                 </div>
               )}

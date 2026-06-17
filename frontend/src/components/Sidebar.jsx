@@ -1,14 +1,19 @@
 import { C } from "../theme";
+import { canAccess } from "../permissions";
 
 export const NAV = [
   { id: "dashboard",     icon: "⊞",  label: "Dashboard"  },
   { id: "students",      icon: "👤", label: "Students"   },
   { id: "teachers",      icon: "🎓", label: "Teachers"   },
+  { id: "employees",     icon: "🧑‍💼", label: "Employees"  },
   { id: "attendance",    icon: "📋", label: "Attendance" },
   { id: "timetable",     icon: "📅", label: "Timetable"  },
   { id: "grades",        icon: "📊", label: "Grades"     },
   { id: "fees",          icon: "💳", label: "Fees"       },
+  { id: "payroll",       icon: "💰", label: "Payroll"    },
+  { id: "expenses",      icon: "🧾", label: "Expenses"   },
   { id: "announcements", icon: "📣", label: "Notices"    },
+  { id: "users",         icon: "🔑", label: "Users"      },
 ];
 
 export default function Sidebar({ active, onNav, open, onToggle, user, onLogout }) {
@@ -40,7 +45,7 @@ export default function Sidebar({ active, onNav, open, onToggle, user, onLogout 
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17,
             }}>🏫</div>
             <div style={{ overflow: "hidden" }}>
-              <div style={{ color: C.white, fontWeight: 700, fontSize: 14, lineHeight: 1.2, whiteSpace: "nowrap" }}>SchoolHub</div>
+              <div style={{ color: C.white, fontWeight: 700, fontSize: 14, lineHeight: 1.2, whiteSpace: "nowrap" }}>S³</div>
               <div style={{ color: "#7B93BE", fontSize: 11, whiteSpace: "nowrap" }}>ERP System</div>
             </div>
           </div>
@@ -63,7 +68,7 @@ export default function Sidebar({ active, onNav, open, onToggle, user, onLogout 
 
       {/* Nav items */}
       <nav style={{ padding: open ? "12px 10px" : "12px 8px", flex: 1 }}>
-        {NAV.map(n => {
+        {NAV.filter(n => canAccess(user?.role, n.id)).map(n => {
           const isActive = active === n.id;
           return (
             <button
@@ -95,13 +100,17 @@ export default function Sidebar({ active, onNav, open, onToggle, user, onLogout 
       </nav>
 
       {/* User footer */}
-      <div style={{
-        padding: open ? "14px 16px" : "14px 0",
-        borderTop: `1px solid ${C.navyMid}`,
-        display: "flex", alignItems: "center",
-        justifyContent: open ? "flex-start" : "center",
-        gap: 10,
-      }}>
+      <div
+        onClick={() => onNav("account")}
+        title="My Account"
+        style={{
+          padding: open ? "14px 16px" : "14px 0",
+          borderTop: `1px solid ${C.navyMid}`,
+          display: "flex", alignItems: "center",
+          justifyContent: open ? "flex-start" : "center",
+          gap: 10, cursor: "pointer",
+          background: active === "account" ? C.navyMid : "transparent",
+        }}>
         <div style={{
           width: 32, height: 32, borderRadius: "50%", background: C.accent, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -115,7 +124,7 @@ export default function Sidebar({ active, onNav, open, onToggle, user, onLogout 
         )}
         {open && (
           <button
-            onClick={onLogout}
+            onClick={(e) => { e.stopPropagation(); onLogout(); }}
             title="Log out"
             style={{
               background: "none", border: "none", cursor: "pointer",

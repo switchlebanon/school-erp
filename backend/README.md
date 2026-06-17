@@ -1,6 +1,6 @@
-# SchoolHub ERP — Backend
+# S³ ERP — Backend
 
-Node.js + Express + PostgreSQL (via Prisma) API for the SchoolHub ERP system.
+Node.js + Express + PostgreSQL (via Prisma) API for the S³ ERP system.
 
 ## 1. Prerequisites
 
@@ -50,8 +50,8 @@ npm run seed
 ```
 
 This creates:
-- Admin login: `admin@schoolhub.test` / `admin123`
-- Teacher login: `rana.aoun@schoolhub.test` / `teacher123`
+- Admin login: `admin@scube.test` / `admin123`
+- Teacher login: `rana.aoun@scube.test` / `teacher123`
 
 ## 5. Run the server
 
@@ -75,7 +75,7 @@ JWT in the `Authorization: Bearer <token>` header.
 # Login
 curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"admin@schoolhub.test\",\"password\":\"admin123\"}"
+  -d "{\"email\":\"admin@scube.test\",\"password\":\"admin123\"}"
 
 # Use the returned token
 curl http://localhost:4000/api/students \

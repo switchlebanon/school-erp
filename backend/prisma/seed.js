@@ -9,10 +9,10 @@ async function main() {
   // ── Admin user ──────────────────────────────────────────────
   const adminPassword = await bcrypt.hash("admin123", 10);
   const admin = await prisma.user.upsert({
-    where: { email: "admin@schoolhub.test" },
+    where: { email: "admin@scube.test" },
     update: {},
     create: {
-      email: "admin@schoolhub.test",
+      email: "admin@scube.test",
       password: adminPassword,
       name: "Admin",
       role: "ADMIN",
@@ -45,12 +45,20 @@ async function main() {
 
   // ── Subjects ─────────────────────────────────────────────────
   const subjectDefs = [
-    { name: "Mathematics", code: "MATH101", color: "#3D7EFF" },
-    { name: "English", code: "ENG101", color: "#22C55E" },
-    { name: "Physics", code: "PHY101", color: "#F59E0B" },
-    { name: "History", code: "HIS101", color: "#A855F7" },
-    { name: "PE", code: "PE101", color: "#EF4444" },
-    { name: "Art", code: "ART101", color: "#EC4899" },
+    { name: "Mathematics",  code: "MATH101", color: "#3D7EFF" },
+    { name: "English",      code: "ENG101",  color: "#22C55E" },
+    { name: "Arabic",       code: "ARA101",  color: "#0EA5E9" },
+    { name: "French",       code: "FRE101",  color: "#6366F1" },
+    { name: "Physics",      code: "PHY101",  color: "#F59E0B" },
+    { name: "Chemistry",    code: "CHM101",  color: "#14B8A6" },
+    { name: "Biology",      code: "BIO101",  color: "#84CC16" },
+    { name: "History",      code: "HIS101",  color: "#A855F7" },
+    { name: "Geography",    code: "GEO101",  color: "#06B6D4" },
+    { name: "Computer Science", code: "CS101", color: "#64748B" },
+    { name: "PE",           code: "PE101",   color: "#EF4444" },
+    { name: "Art",          code: "ART101",  color: "#EC4899" },
+    { name: "Music",        code: "MUS101",  color: "#F97316" },
+    { name: "Religion",     code: "REL101",  color: "#8B5CF6" },
   ];
   const subjects = {};
   for (const def of subjectDefs) {
@@ -63,10 +71,10 @@ async function main() {
 
   // ── Teachers ─────────────────────────────────────────────────
   const teacherDefs = [
-    { name: "Rana Aoun", email: "rana.aoun@schoolhub.test", subject: "Mathematics" },
-    { name: "Elie Khoury", email: "elie.khoury@schoolhub.test", subject: "Physics" },
-    { name: "Sara Gemayel", email: "sara.gemayel@schoolhub.test", subject: "English" },
-    { name: "Ziad Rahme", email: "ziad.rahme@schoolhub.test", subject: "History", status: "ON_LEAVE" },
+    { name: "Rana Aoun", email: "rana.aoun@scube.test", subject: "Mathematics" },
+    { name: "Elie Khoury", email: "elie.khoury@scube.test", subject: "Physics" },
+    { name: "Sara Gemayel", email: "sara.gemayel@scube.test", subject: "English" },
+    { name: "Ziad Rahme", email: "ziad.rahme@scube.test", subject: "History", status: "ON_LEAVE" },
   ];
   const teacherPassword = await bcrypt.hash("teacher123", 10);
   for (const def of teacherDefs) {
@@ -199,8 +207,8 @@ async function main() {
   }
 
   console.log("✅ Seed complete!");
-  console.log("   Admin login: admin@schoolhub.test / admin123");
-  console.log("   Teacher login (any): rana.aoun@schoolhub.test / teacher123");
+  console.log("   Admin login: admin@scube.test / admin123");
+  console.log("   Teacher login (any): rana.aoun@scube.test / teacher123");
 }
 
 main()

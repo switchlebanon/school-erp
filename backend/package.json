@@ -1,10 +1,10 @@
 {
   "name": "school-erp-backend",
   "version": "1.0.0",
-  "description": "Backend API for SchoolHub ERP System",
+  "description": "Backend API for S³ ERP System",
   "main": "src/server.js",
   "type": "commonjs",
-"scripts": {
+  "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "build": "prisma generate && prisma migrate deploy",

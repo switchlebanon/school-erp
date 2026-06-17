@@ -115,4 +115,49 @@ async function getSubjects(req, res) {
   }
 }
 
-module.exports = { getSections, getGradeLevels, createSection, deleteSection, getSubjects };
+// A palette of distinct colors to assign to new subjects automatically
+const SUBJECT_COLORS = [
+  "#3D7EFF", "#22C55E", "#0EA5E9", "#6366F1", "#F59E0B", "#14B8A6",
+  "#84CC16", "#A855F7", "#06B6D4", "#64748B", "#EF4444", "#EC4899",
+  "#F97316", "#8B5CF6",
+];
+
+// POST /api/sections/subjects
+// Body: { name, code?, color? }
+// Creates a new subject. If color isn't provided, picks one from the palette.
+async function createSubject(req, res) {
+  try {
+    const { name, code, color } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "name is required" });
+    }
+
+    const trimmedName = String(name).trim();
+
+    const existing = await prisma.subject.findUnique({ where: { name: trimmedName } });
+    if (existing) {
+      return res.status(409).json({ error: `Subject "${trimmedName}" already exists`, subject: existing });
+    }
+
+    let finalColor = color;
+    if (!finalColor) {
+      const count = await prisma.subject.count();
+      finalColor = SUBJECT_COLORS[count % SUBJECT_COLORS.length];
+    }
+
+    const subject = await prisma.subject.create({
+      data: {
+        name: trimmedName,
+        code: code ? String(code).trim() : null,
+        color: finalColor,
+      },
+    });
+
+    res.status(201).json(subject);
+  } catch (err) {
+    console.error("createSubject error:", err);
+    res.status(500).json({ error: "Failed to create subject" });
+  }
+}
+
+module.exports = { getSections, getGradeLevels, createSection, deleteSection, getSubjects, createSubject };

@@ -32,6 +32,13 @@ export default function StudentModal({ onClose, onDone, student }) {
   const [status, setStatus]             = useState(student?.rawStatus || "ACTIVE");
   const [guardianName, setGuardianName] = useState(student?.guardianName || "");
   const [guardianPhone, setGuardianPhone] = useState(student?.guardianPhone || "");
+  const [guardianAccountId, setGuardianAccountId] = useState(student?.guardianId ? String(student.guardianId) : "");
+  const [parentAccounts, setParentAccounts] = useState([]);
+  const [loadingParents, setLoadingParents] = useState(true);
+  const [studentAccount, setStudentAccount] = useState(null); // { exists, email, isActive }
+  const [resetPasswordResult, setResetPasswordResult] = useState(null);
+  const [accountActionError, setAccountActionError] = useState("");
+  const [accountActionLoading, setAccountActionLoading] = useState(false);
 
   // ── Tuition fee fields (Add mode only) ───────────────────────
   const [addFee, setAddFee]             = useState(true);  // toggle
@@ -52,6 +59,7 @@ export default function StudentModal({ onClose, onDone, student }) {
   const [submitting, setSubmitting]     = useState(false);
   const [step, setStep]                 = useState("form"); // "form" | "success"
   const [createdInvoice, setCreatedInvoice] = useState(null);
+  const [createdAccount, setCreatedAccount] = useState(null);
 
   useEffect(() => {
     api.get("/sections")
@@ -61,7 +69,47 @@ export default function StudentModal({ onClose, onDone, student }) {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    if (isEdit) {
+      api.get("/users?role=PARENT")
+        .then(setParentAccounts)
+        .catch(() => {})
+        .finally(() => setLoadingParents(false));
+
+      api.get(`/students/${student.id}/account`)
+        .then(setStudentAccount)
+        .catch(() => {});
+    } else {
+      setLoadingParents(false);
+    }
   }, []);
+
+  const handleCreateStudentAccount = async () => {
+    setAccountActionError("");
+    setAccountActionLoading(true);
+    try {
+      const account = await api.post(`/students/${student.id}/account`);
+      setStudentAccount({ exists: true, email: account.email, isActive: true });
+      setResetPasswordResult({ email: account.email, password: account.password });
+    } catch (err) {
+      setAccountActionError(err.message || "Failed to create account");
+    } finally {
+      setAccountActionLoading(false);
+    }
+  };
+
+  const handleResetStudentPassword = async () => {
+    setAccountActionError("");
+    setAccountActionLoading(true);
+    try {
+      const result = await api.post(`/students/${student.id}/account/reset-password`);
+      setResetPasswordResult({ email: studentAccount.email, password: result.password });
+    } catch (err) {
+      setAccountActionError(err.message || "Failed to reset password");
+    } finally {
+      setAccountActionLoading(false);
+    }
+  };
 
   // When fee amount changes, default first payment to full amount
   useEffect(() => {
@@ -95,6 +143,7 @@ export default function StudentModal({ onClose, onDone, student }) {
           status,
           guardianName:  guardianName.trim() || undefined,
           guardianPhone: guardianPhone.trim() || undefined,
+          guardianId:    guardianAccountId ? Number(guardianAccountId) : null,
         });
         onDone();
         return;
@@ -110,6 +159,10 @@ export default function StudentModal({ onClose, onDone, student }) {
         guardianName:  guardianName.trim() || undefined,
         guardianPhone: guardianPhone.trim() || undefined,
       });
+
+      if (newStudent.account) {
+        setCreatedAccount(newStudent.account);
+      }
 
       let invoice = null;
 
@@ -150,7 +203,7 @@ export default function StudentModal({ onClose, onDone, student }) {
     const remaining = total - paid;
 
     return (
-      <div onClick={onClose} style={{
+      <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
         position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 100, padding: 16,
@@ -165,6 +218,27 @@ export default function StudentModal({ onClose, onDone, student }) {
           <p style={{ fontSize: 13, color: C.textMid, margin: "0 0 20px" }}>
             <b>{name}</b> has been enrolled successfully.
           </p>
+
+          {createdAccount && (
+            <div style={{ background: C.accentL, border: `1px solid ${C.accent}40`, borderRadius: 10, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+                🔑 Student Login Created
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.slate }}>Email</span>
+                  <span style={{ fontWeight: 700, color: C.text, fontFamily: "monospace" }}>{createdAccount.email}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.slate }}>Password</span>
+                  <span style={{ fontWeight: 700, color: C.text, fontFamily: "monospace" }}>{createdAccount.password}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: C.textMid, marginTop: 8 }}>
+                Save or print this now — the password won't be shown again. The student can change it later in My Account.
+              </div>
+            </div>
+          )}
 
           {createdInvoice && (
             <div style={{ background: C.slateL, borderRadius: 10, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
@@ -216,7 +290,7 @@ export default function StudentModal({ onClose, onDone, student }) {
 
   // ── Main form ─────────────────────────────────────────────────
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
       display: "flex", alignItems: "center", justifyContent: "center",
       zIndex: 100, padding: 16,
@@ -305,6 +379,107 @@ export default function StudentModal({ onClose, onDone, student }) {
               />
             </div>
           </div>
+
+          {/* Linked parent portal account (Edit mode only) */}
+          {isEdit && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>
+                Linked Parent Account
+                <span style={{ fontWeight: 400, color: C.slate, fontSize: 10, marginLeft: 4 }}>
+                  (gives portal access to this student's data)
+                </span>
+              </label>
+              <select
+                value={guardianAccountId}
+                onChange={e => setGuardianAccountId(e.target.value)}
+                style={inputStyle}
+                disabled={loadingParents}
+              >
+                <option value="">— No linked account —</option>
+                {parentAccounts.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.email})</option>
+                ))}
+              </select>
+              {parentAccounts.length === 0 && !loadingParents && (
+                <div style={{ fontSize: 11, color: C.slate, marginTop: 4 }}>
+                  No parent accounts yet — create one in Manage Users (role: Parent), then link it here.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Student's own login account */}
+          {isEdit && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={labelStyle}>Student Login Account</label>
+
+              {studentAccount === null && (
+                <div style={{ fontSize: 13, color: C.slate }}>Loading…</div>
+              )}
+
+              {studentAccount?.exists && (
+                <div style={{ background: C.greenL, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.green }}>✓ Account exists</span>
+                    <button
+                      type="button"
+                      onClick={handleResetStudentPassword}
+                      disabled={accountActionLoading}
+                      style={{
+                        background: C.white, color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 6,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      Reset Password
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMid, fontFamily: "monospace" }}>{studentAccount.email}</div>
+                </div>
+              )}
+
+              {studentAccount && !studentAccount.exists && (
+                <div style={{ background: C.amberL, borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: C.amber, fontWeight: 600 }}>No login account yet</span>
+                  <button
+                    type="button"
+                    onClick={handleCreateStudentAccount}
+                    disabled={accountActionLoading}
+                    style={{
+                      background: C.amber, color: C.white, border: "none", borderRadius: 6,
+                      padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    {accountActionLoading ? "Creating…" : "Create Account"}
+                  </button>
+                </div>
+              )}
+
+              {accountActionError && (
+                <div style={{ background: C.redL, color: C.red, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 8, marginTop: 8 }}>
+                  {accountActionError}
+                </div>
+              )}
+
+              {resetPasswordResult && (
+                <div style={{ background: C.accentL, border: `1px solid ${C.accent}40`, borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                    New Credentials
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                    <span style={{ color: C.slate }}>Email</span>
+                    <span style={{ fontWeight: 700, fontFamily: "monospace" }}>{resetPasswordResult.email}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: C.slate }}>Password</span>
+                    <span style={{ fontWeight: 700, fontFamily: "monospace" }}>{resetPasswordResult.password}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMid, marginTop: 6 }}>
+                    Save this now — it won't be shown again.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {!isEdit && (
             <>
               {sectionHeading("Tuition Fee")}

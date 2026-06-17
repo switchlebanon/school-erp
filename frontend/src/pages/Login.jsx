@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@schoolhub.test");
+  const [email, setEmail] = useState("admin@scube.test");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ export default function Login() {
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
           }}>🏫</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: C.text, lineHeight: 1.2 }}>SchoolHub</div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: C.text, lineHeight: 1.2 }}>S³</div>
             <div style={{ color: C.slate, fontSize: 12 }}>ERP System</div>
           </div>
         </div>
@@ -95,7 +95,7 @@ export default function Login() {
         </form>
 
         <div style={{ marginTop: 18, fontSize: 12, color: C.slate, textAlign: "center" }}>
-          Demo admin: <b>admin@schoolhub.test</b> / <b>admin123</b>
+          Demo admin: <b>admin@scube.test</b> / <b>admin123</b>
         </div>
       </div>
     </div>

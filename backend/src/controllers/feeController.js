@@ -27,12 +27,27 @@ async function recalcInvoice(invoiceId) {
 }
 
 // GET /api/fees
+// PARENT/STUDENT roles are scoped to only invoices for their own linked student(s).
 async function getFees(req, res) {
   try {
     const { studentId, status } = req.query;
     const where = {};
     if (studentId) where.studentId = Number(studentId);
     if (status && status !== "ALL") where.status = status;
+
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      const myStudents = await prisma.student.findMany({
+        where: { guardianId: req.user.id },
+        select: { id: true },
+      });
+      const myIds = myStudents.map(s => s.id);
+
+      // If a specific studentId was requested, ensure it's one of theirs
+      if (where.studentId && !myIds.includes(where.studentId)) {
+        return res.status(403).json({ error: "You don't have access to this student's invoices" });
+      }
+      where.studentId = where.studentId || { in: myIds };
+    }
 
     const invoices = await prisma.feeInvoice.findMany({
       where,
@@ -48,17 +63,28 @@ async function getFees(req, res) {
 }
 
 // GET /api/fees/summary
+// Only Admins get the school-wide summary; Parents/Students get their own.
 async function getFeeSummary(req, res) {
   try {
+    let studentFilter = {};
+
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      const myStudents = await prisma.student.findMany({
+        where: { guardianId: req.user.id },
+        select: { id: true },
+      });
+      studentFilter = { studentId: { in: myStudents.map(s => s.id) } };
+    }
+
     const [paidAgg, pendingAgg, overdueAgg] = await Promise.all([
-      prisma.feeInvoice.aggregate({ where: { status: "PAID" },    _sum: { totalPaid: true } }),
-      prisma.feeInvoice.aggregate({ where: { status: "PENDING" }, _sum: { amount: true }    }),
-      prisma.feeInvoice.aggregate({ where: { status: "OVERDUE" }, _sum: { amount: true }    }),
+      prisma.feeInvoice.aggregate({ where: { ...studentFilter, status: "PAID" },    _sum: { totalPaid: true } }),
+      prisma.feeInvoice.aggregate({ where: { ...studentFilter, status: "PENDING" }, _sum: { amount: true }    }),
+      prisma.feeInvoice.aggregate({ where: { ...studentFilter, status: "OVERDUE" }, _sum: { amount: true }    }),
     ]);
 
     // Also get partial payments collected on non-PAID invoices
     const partialAgg = await prisma.feeInvoice.aggregate({
-      where: { status: { in: ["PENDING", "OVERDUE"] } },
+      where: { ...studentFilter, status: { in: ["PENDING", "OVERDUE"] } },
       _sum: { totalPaid: true },
     });
 
@@ -81,6 +107,14 @@ async function getFeeById(req, res) {
       include: invoiceInclude,
     });
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+    if (req.user.role === "PARENT" || req.user.role === "STUDENT") {
+      const student = await prisma.student.findUnique({ where: { id: invoice.studentId } });
+      if (!student || student.guardianId !== req.user.id) {
+        return res.status(403).json({ error: "You don't have access to this invoice" });
+      }
+    }
+
     res.json(invoice);
   } catch (err) {
     console.error("getFeeById error:", err);

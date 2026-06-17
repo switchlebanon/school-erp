@@ -74,7 +74,7 @@ export default function NewInvoiceModal({ onClose, onDone }) {
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16,
     }}>

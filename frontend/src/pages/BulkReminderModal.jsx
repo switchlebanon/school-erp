@@ -68,7 +68,7 @@ export default function BulkReminderModal({ invoices, onClose }) {
     const isSent    = sentIds.has(current.id);
 
     return (
-      <div onClick={onClose} style={{
+      <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
         position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 300, padding: 16, fontFamily: "'Inter', -apple-system, sans-serif",
@@ -178,7 +178,7 @@ export default function BulkReminderModal({ invoices, onClose }) {
 
   // ── Step 1: Selection view ─────────────────────────────────────
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
       display: "flex", alignItems: "center", justifyContent: "center",
       zIndex: 300, padding: 16, fontFamily: "'Inter', -apple-system, sans-serif",

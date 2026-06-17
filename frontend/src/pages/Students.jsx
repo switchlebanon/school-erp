@@ -12,6 +12,96 @@ const statusLabel = (s) => {
   return s.charAt(0) + s.slice(1).toLowerCase();
 };
 
+const ATTENDANCE_STYLE = {
+  PRESENT: { label: "Present", color: C.green,  bg: C.greenL,  icon: "✓" },
+  ABSENT:  { label: "Absent",  color: C.red,    bg: C.redL,    icon: "✗" },
+  LATE:    { label: "Late",    color: C.amber,  bg: C.amberL,  icon: "⏰" },
+  EXCUSED: { label: "Excused", color: C.accent, bg: C.accentL, icon: "📝" },
+};
+
+// Shows a student's recent attendance history plus a yearly absence counter
+function StudentAttendancePanel({ studentId }) {
+  const [records, setRecords] = useState(null);
+  const [yearly, setYearly]   = useState(null);
+  const [error, setError]     = useState("");
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.get(`/attendance/student/${studentId}?limit=15`),
+      api.get(`/attendance/yearly/${studentId}`),
+    ])
+      .then(([recordsData, yearlyData]) => {
+        if (active) { setRecords(recordsData); setYearly(yearlyData); }
+      })
+      .catch(err => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [studentId]);
+
+  if (error) return <div style={{ fontSize: 13, color: C.red }}>{error}</div>;
+  if (records === null) return <div style={{ fontSize: 13, color: C.slate }}>Loading…</div>;
+
+  return (
+    <div>
+      {/* Yearly absence counter */}
+      {yearly && (
+        <div style={{ background: C.slateL, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.slate, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            Academic Year {yearly.academicYear} — Absence Counter
+          </div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: yearly.counted > 0 ? C.red : C.text }}>{yearly.counted}</div>
+              <div style={{ fontSize: 11, color: C.slate }}>Counted absences</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: C.accent }}>{yearly.excused}</div>
+              <div style={{ fontSize: 11, color: C.slate }}>Excused (not counted)</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: C.amber }}>{yearly.late}</div>
+              <div style={{ fontSize: 11, color: C.slate }}>Late</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: C.textMid, marginTop: 8 }}>
+            Excused absences (with a reason like sick leave) don't count toward the limit.
+          </div>
+        </div>
+      )}
+
+      {records.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.slate }}>No attendance recorded yet.</div>
+      ) : (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.slate, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            Recent Days
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {records.map(r => {
+              const info = ATTENDANCE_STYLE[r.status] || ATTENDANCE_STYLE.PRESENT;
+              return (
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${C.border}`, gap: 10 }}>
+                  <span style={{ fontSize: 13, color: C.textMid, whiteSpace: "nowrap" }}>
+                    {new Date(r.date).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
+                  </span>
+                  {r.reason && (
+                    <span style={{ fontSize: 12, color: C.slate, flex: 1, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {r.reason}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 20, whiteSpace: "nowrap" }}>
+                    {info.icon} {info.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Shows a student's grade history, fetched on demand
 function StudentGradesPanel({ studentId }) {
   const [grades, setGrades] = useState(null);
@@ -92,6 +182,7 @@ export default function Students() {
     guardian: s.guardian?.name || s.guardianName || "—",
     guardianName: s.guardianName || "",
     guardianPhone: s.guardianPhone || "",
+    guardianId: s.guardianId || null,
     dateOfBirth: s.dateOfBirth,
     gpa: "—",
     fees: "—",
@@ -178,7 +269,7 @@ export default function Students() {
 
           <Card>
             <SectionTitle>Attendance</SectionTitle>
-            <div style={{ fontSize: 13, color: C.slate }}>Will populate once the Attendance module is connected.</div>
+            <StudentAttendancePanel studentId={s.id} />
           </Card>
         </div>
 

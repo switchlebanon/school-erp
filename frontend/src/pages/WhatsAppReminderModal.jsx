@@ -19,7 +19,7 @@ export default function WhatsAppReminderModal({ invoice, onClose }) {
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
       display: "flex", alignItems: "center", justifyContent: "center",
       zIndex: 300, padding: 16,

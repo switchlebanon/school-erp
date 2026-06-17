@@ -8,6 +8,13 @@ const sectionRoutes = require("./routes/sections");
 const feeRoutes     = require("./routes/fees");
 const exportRoutes  = require("./routes/export");
 const gradeRoutes   = require("./routes/grades");
+const userRoutes    = require("./routes/users");
+const teacherRoutes = require("./routes/teachers");
+const employeeRoutes = require("./routes/employees");
+const payrollRoutes  = require("./routes/payroll");
+const expenseRoutes  = require("./routes/expenses");
+const attendanceRoutes = require("./routes/attendance");
+const timetableRoutes  = require("./routes/timetable");
 
 const app = express();
 
@@ -27,14 +34,15 @@ app.use("/api/sections", sectionRoutes);
 app.use("/api/fees",     feeRoutes);
 app.use("/api/export",   exportRoutes);
 app.use("/api/grades",   gradeRoutes);
+app.use("/api/users",    userRoutes);
+app.use("/api/teachers", teacherRoutes);
+app.use("/api/employees", employeeRoutes);
+app.use("/api/payroll",  payrollRoutes);
+app.use("/api/expenses", expenseRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
-// More modules will be added here as they're built:
-// app.use("/api/teachers", teacherRoutes);
-// app.use("/api/attendance", attendanceRoutes);
-// app.use("/api/grades", gradeRoutes);
-// app.use("/api/fees", feeRoutes);
-// app.use("/api/timetable", timetableRoutes);
-// app.use("/api/announcements", announcementRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/timetable",  timetableRoutes);
 
 // ─── 404 handler ───────────────────────────────────────────────
 app.use((req, res) => {
@@ -49,5 +57,5 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 SchoolHub API running on http://localhost:${PORT}`);
+  console.log(`🚀 S³ API running on http://localhost:${PORT}`);
 });

@@ -1,6 +1,6 @@
-# SchoolHub ERP — Frontend
+# S³ ERP — Frontend
 
-React + Vite frontend for the SchoolHub ERP system.
+React + Vite frontend for the S³ ERP system.
 
 ## 1. Setup
 
@@ -30,7 +30,7 @@ Open **http://localhost:5173**.
 ## 3. Log in
 
 Use the seeded admin account:
-- Email: `admin@schoolhub.test`
+- Email: `admin@scube.test`
 - Password: `admin123`
 
 ## What's connected to the backend so far

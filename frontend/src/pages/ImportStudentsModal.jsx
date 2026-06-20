@@ -500,6 +500,65 @@ export default function ImportStudentsModal({ onClose, onDone }) {
                 </div>
               )}
 
+              {/* Parent login credentials (only newly-created accounts have a password to show;
+                  rows where the guardian's phone matched an existing parent are linked, not re-issued) */}
+              {importResult.results.some(r => r.status === "created" && r.parentAccount?.password) && (
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: C.greenL, padding: "8px 12px",
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      🔑 Parent Login Credentials
+                    </span>
+                    <button
+                      onClick={() => {
+                        const created = importResult.results.filter(r => r.status === "created" && r.parentAccount?.password);
+                        const csv = ["Guardian Name,Student,Email,Password", ...created.map(r =>
+                          `"${r.parentAccount.email.split('@')[0]}","${r.student.name}","${r.parentAccount.email}","${r.parentAccount.password}"`
+                        )].join("\n");
+                        const blob = new Blob([csv], { type: "text/csv" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "parent-logins.csv";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{
+                        background: C.green, color: C.white, border: "none", borderRadius: 6,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      }}
+                    >
+                      ⬇ Download CSV
+                    </button>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: C.slateL }}>
+                          {["Student", "Email", "Password"].map(h => (
+                            <th key={h} style={{ padding: "6px 12px", textAlign: "left", color: C.slate, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.results.filter(r => r.status === "created" && r.parentAccount?.password).map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                            <td style={{ padding: "6px 12px", fontWeight: 600 }}>{r.student.name}</td>
+                            <td style={{ padding: "6px 12px", fontFamily: "monospace" }}>{r.parentAccount.email}</td>
+                            <td style={{ padding: "6px 12px", fontFamily: "monospace" }}>{r.parentAccount.password}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textMid, padding: "8px 12px", borderTop: `1px solid ${C.border}` }}>
+                    Siblings sharing the same guardian phone number are linked to one existing parent account instead of getting a new one.
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button onClick={onDone} style={{
                   background: C.accent, color: C.white, border: "none", borderRadius: 8,

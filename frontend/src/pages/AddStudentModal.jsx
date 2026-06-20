@@ -19,7 +19,7 @@ const sectionHeading = (label) => (
 
 // Used for both Add and Edit.
 // If `student` prop is passed → Edit mode.
-export default function StudentModal({ onClose, onDone, student }) {
+export default function StudentModal({ onClose, onDone, student, defaultSectionId }) {
   const isEdit = Boolean(student);
 
   // ── Student fields ───────────────────────────────────────────
@@ -28,7 +28,7 @@ export default function StudentModal({ onClose, onDone, student }) {
   const [studentCode, setStudentCode]   = useState(student?.studentCode || "");
   const [name, setName]                 = useState(student?.name || "");
   const [dateOfBirth, setDateOfBirth]   = useState(student?.dateOfBirth ? student.dateOfBirth.slice(0, 10) : "");
-  const [sectionId, setSectionId]       = useState(student?.sectionId ? String(student.sectionId) : "");
+  const [sectionId, setSectionId]       = useState(student?.sectionId ? String(student.sectionId) : defaultSectionId ? String(defaultSectionId) : "");
   const [status, setStatus]             = useState(student?.rawStatus || "ACTIVE");
   const [guardianName, setGuardianName] = useState(student?.guardianName || "");
   const [guardianPhone, setGuardianPhone] = useState(student?.guardianPhone || "");
@@ -60,6 +60,8 @@ export default function StudentModal({ onClose, onDone, student }) {
   const [step, setStep]                 = useState("form"); // "form" | "success"
   const [createdInvoice, setCreatedInvoice] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
+  const [createdStudentCode, setCreatedStudentCode] = useState(null);
+  const [createdParentAccount, setCreatedParentAccount] = useState(null);
 
   useEffect(() => {
     api.get("/sections")
@@ -122,7 +124,9 @@ export default function StudentModal({ onClose, onDone, student }) {
 
     // Validate student fields
     if (!name.trim() || !sectionId) { setError("Name and section are required."); return; }
-    if (!isEdit && !studentCode.trim()) { setError("Student code is required."); return; }
+    if (!isEdit && !dateOfBirth) { setError("Date of birth is required — it's used to generate the student ID."); return; }
+    if (!isEdit && !guardianName.trim()) { setError("Guardian name is required."); return; }
+    if (!isEdit && !guardianPhone.trim()) { setError("Guardian WhatsApp number is required."); return; }
     if (!isEdit && addFee) {
       if (!feeAmount || Number(feeAmount) <= 0) { setError("Please enter a valid tuition amount."); return; }
       if (!feeDueDate) { setError("Please set a due date for the fee."); return; }
@@ -151,9 +155,8 @@ export default function StudentModal({ onClose, onDone, student }) {
 
       // ── Create student ──
       const newStudent = await api.post("/students", {
-        studentCode:   studentCode.trim(),
         name:          name.trim(),
-        dateOfBirth:   dateOfBirth || undefined,
+        dateOfBirth:   dateOfBirth,
         sectionId:     Number(sectionId),
         status,
         guardianName:  guardianName.trim() || undefined,
@@ -163,6 +166,10 @@ export default function StudentModal({ onClose, onDone, student }) {
       if (newStudent.account) {
         setCreatedAccount(newStudent.account);
       }
+      if (newStudent.parentAccount) {
+        setCreatedParentAccount(newStudent.parentAccount);
+      }
+      setCreatedStudentCode(newStudent.studentCode);
 
       let invoice = null;
 
@@ -215,14 +222,19 @@ export default function StudentModal({ onClose, onDone, student }) {
         }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: "0 0 6px" }}>Student Added!</h2>
-          <p style={{ fontSize: 13, color: C.textMid, margin: "0 0 20px" }}>
+          <p style={{ fontSize: 13, color: C.textMid, margin: "0 0 4px" }}>
             <b>{name}</b> has been enrolled successfully.
           </p>
+          {createdStudentCode && (
+            <p style={{ fontSize: 13, color: C.slate, margin: "0 0 20px" }}>
+              Student ID: <span style={{ fontFamily: "monospace", fontWeight: 700, color: C.accent }}>{createdStudentCode}</span>
+            </p>
+          )}
 
           {createdAccount && (
-            <div style={{ background: C.accentL, border: `1px solid ${C.accent}40`, borderRadius: 10, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+            <div style={{ background: C.accentL, border: `1px solid ${C.accent}40`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, textAlign: "left" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
-                🔑 Student Login Created
+                🎓 Student Login
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -234,8 +246,34 @@ export default function StudentModal({ onClose, onDone, student }) {
                   <span style={{ fontWeight: 700, color: C.text, fontFamily: "monospace" }}>{createdAccount.password}</span>
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: C.textMid, marginTop: 8 }}>
-                Save or print this now — the password won't be shown again. The student can change it later in My Account.
+            </div>
+          )}
+
+          {createdParentAccount && (
+            <div style={{ background: createdParentAccount.isExisting ? C.amberL : C.greenL, border: `1px solid ${createdParentAccount.isExisting ? C.amber : C.green}40`, borderRadius: 10, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: createdParentAccount.isExisting ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+                👨‍👩‍👧 {createdParentAccount.isExisting ? "Existing Parent Account — Student Linked" : "Parent Login Created"}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.slate }}>Email</span>
+                  <span style={{ fontWeight: 700, color: C.text, fontFamily: "monospace" }}>{createdParentAccount.email}</span>
+                </div>
+                {createdParentAccount.isExisting ? (
+                  <div style={{ fontSize: 12, color: C.textMid, marginTop: 4 }}>
+                    This parent already has an account — the new student has been linked to it automatically. They can log in with their existing password.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: C.slate }}>Password</span>
+                      <span style={{ fontWeight: 700, color: C.text, fontFamily: "monospace" }}>{createdParentAccount.password}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textMid, marginTop: 4 }}>
+                      Save these credentials — passwords won't be shown again.
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -266,11 +304,49 @@ export default function StudentModal({ onClose, onDone, student }) {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={onDone} style={{
               background: C.slateL, color: C.textMid, border: "none", borderRadius: 8,
               padding: "9px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer",
             }}>Done</button>
+
+            {/* Send credentials via WhatsApp to guardian */}
+            {guardianPhone && (createdAccount || createdParentAccount) && (() => {
+              const phone = guardianPhone.replace(/[^\d]/g, "");
+              const appUrl = window.location.origin;
+              var msg = "Hello " + guardianName + ",\n\n";
+              msg += "Welcome to S³ ERP! Here are the login credentials for your family:\n\n";
+              msg += "🌐 App: " + appUrl + "\n\n";
+              if (createdAccount) {
+                msg += "🎓 *Student Login (" + name + ")*\n";
+                msg += "• Email: " + createdAccount.email + "\n";
+                msg += "• Password: " + createdAccount.password + "\n\n";
+              }
+              if (createdParentAccount && !createdParentAccount.isExisting) {
+                msg += "👨‍👩‍👧 *Parent Login*\n";
+                msg += "• Email: " + createdParentAccount.email + "\n";
+                msg += "• Password: " + createdParentAccount.password + "\n\n";
+              } else if (createdParentAccount && createdParentAccount.isExisting) {
+                msg += "👨‍👩‍👧 *Parent Login*\n";
+                msg += "• Email: " + createdParentAccount.email + "\n";
+                msg += "• Password: (your existing password)\n\n";
+              }
+              msg += "Please save these credentials and change your password after first login.\n\n";
+              msg += "*S³ School Administration*";
+              const url = "https://wa.me/" + phone + "?text=" + encodeURIComponent(msg);
+              return (
+                <button
+                  onClick={() => window.open(url, "_blank")}
+                  style={{
+                    background: "#25D366", color: C.white, border: "none", borderRadius: 8,
+                    padding: "9px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  💬 Send via WhatsApp
+                </button>
+              );
+            })()}
             {createdInvoice && (
               <button
                 onClick={() => { onDone(createdInvoice); }}
@@ -317,9 +393,8 @@ export default function StudentModal({ onClose, onDone, student }) {
           {sectionHeading("Student Information")}
 
           {!isEdit && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Student Code</label>
-              <input value={studentCode} onChange={e => setStudentCode(e.target.value)} placeholder="e.g. STU-2026-007" style={inputStyle} />
+            <div style={{ background: C.accentL, borderRadius: 8, padding: "10px 12px", marginBottom: 14, fontSize: 12, color: C.accent, fontWeight: 600 }}>
+              🪪 Student ID will be auto-generated as <span style={{ fontFamily: "monospace" }}>S3-YYYYMMDD-XXX</span> based on date of birth
             </div>
           )}
 
@@ -349,33 +424,41 @@ export default function StudentModal({ onClose, onDone, student }) {
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Date of Birth (optional)</label>
-            <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} style={inputStyle} />
+            <label style={labelStyle}>
+              Date of Birth <span style={{ color: C.red }}>*</span>
+              {!isEdit && <span style={{ fontWeight: 400, color: C.slate, fontSize: 10, marginLeft: 4 }}>(required to generate student ID)</span>}
+            </label>
+            <input
+              type="date"
+              value={dateOfBirth}
+              onChange={e => setDateOfBirth(e.target.value)}
+              style={{ ...inputStyle, border: !isEdit && !dateOfBirth ? `1px solid ${C.red}` : `1px solid ${C.border}` }}
+              required={!isEdit}
+            />
           </div>
 
           {/* Guardian info */}
           <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Guardian Name (optional)</label>
+              <label style={labelStyle}>
+                Guardian Name {!isEdit && <span style={{ color: C.red }}>*</span>}
+              </label>
               <input
                 value={guardianName}
                 onChange={e => setGuardianName(e.target.value)}
                 placeholder="e.g. Hassan Khalil"
-                style={inputStyle}
+                style={{ ...inputStyle, border: !isEdit && !guardianName.trim() ? `1px solid ${C.red}` : `1px solid ${C.border}` }}
               />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>
-                Guardian WhatsApp 📱
-                <span style={{ fontWeight: 400, color: C.slate, fontSize: 10, marginLeft: 4 }}>
-                  (for reminders)
-                </span>
+                Guardian WhatsApp 📱 {!isEdit && <span style={{ color: C.red }}>*</span>}
               </label>
               <input
                 value={guardianPhone}
                 onChange={e => setGuardianPhone(e.target.value)}
                 placeholder="+961 71 234 567"
-                style={inputStyle}
+                style={{ ...inputStyle, border: !isEdit && !guardianPhone.trim() ? `1px solid ${C.red}` : `1px solid ${C.border}` }}
               />
             </div>
           </div>

@@ -199,6 +199,17 @@ export default function Students() {
   useEffect(() => { fetchStudents(); }, []);
 
   const openAdd  = () => { setEditStudent(null); setShowModal(true); };
+
+  const handleDelete = async (s) => {
+    if (!window.confirm(`Delete "${s.name}" (${s.studentCode})?\n\nThis will permanently remove the student, their login account, attendance, grades, and fee records.`)) return;
+    try {
+      await api.delete(`/students/${s.id}`);
+      setSelected(null);
+      fetchStudents();
+    } catch (err) {
+      setError(err.message || "Failed to delete student");
+    }
+  };
   const openEdit = (s, e) => { e.stopPropagation(); setEditStudent(s); setShowModal(true); };
 
   // onDone receives an optional invoice when "Print Receipt" is clicked
@@ -241,16 +252,27 @@ export default function Students() {
                 <div style={{ color: C.slate, fontSize: 12, marginTop: 2 }}>Code: {s.studentCode}</div>
                 <div style={{ marginTop: 6 }}><Badge {...statusColor(s.status)} label={s.status} /></div>
               </div>
-              {/* Edit button on detail view */}
-              <button
-                onClick={(e) => { openEdit(s, e); setSelected(null); }}
-                style={{
-                  background: C.accentL, color: C.accent, border: "none", borderRadius: 8,
-                  padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer", flexShrink: 0,
-                }}
-              >
-                ✏️ Edit Student
-              </button>
+              {/* Edit + Delete buttons on detail view */}
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={(e) => { openEdit(s, e); setSelected(null); }}
+                  style={{
+                    background: C.accentL, color: C.accent, border: "none", borderRadius: 8,
+                    padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
+                  style={{
+                    background: C.redL, color: C.red, border: "none", borderRadius: 8,
+                    padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
             </div>
             <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 14, display: "flex", gap: 24 }}>
               {[["Guardian", s.guardian], ["Date of Birth", s.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString() : "—"]].map(([k, v]) => (
@@ -392,6 +414,12 @@ export default function Students() {
                           style={{ background: C.greenL, color: C.green, border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(s); }}
+                          style={{ background: C.redL, color: C.red, border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

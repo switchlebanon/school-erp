@@ -19,20 +19,20 @@ export const ROLE_PAGES = {
   ADMIN: "ALL",
 
   TEACHER: [
-    "dashboard",
     "students",
     "attendance",
     "timetable",
     "grades",
     "announcements",
+    "payroll",
   ],
 
   PARENT: [
     "dashboard",
     "fees",
     "announcements",
-    "grades",       // read-only view of their child's grades
-    "attendance",   // read-only view of their child's attendance
+    "grades",
+    "attendance",
   ],
 
   STUDENT: [
@@ -44,13 +44,15 @@ export const ROLE_PAGES = {
 
   EMPLOYEE: [
     "dashboard",
+    "payroll",
     "announcements",
+    "grades",
   ],
 };
 
 // All page IDs that exist in the app (used when role === "ALL")
 export const ALL_PAGES = [
-  "dashboard", "students", "teachers", "attendance", "timetable",
+  "dashboard", "students", "classes", "teachers", "attendance", "timetable",
   "grades", "fees", "announcements", "users", "employees", "payroll", "expenses",
 ];
 

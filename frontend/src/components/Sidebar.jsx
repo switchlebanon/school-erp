@@ -4,6 +4,7 @@ import { canAccess } from "../permissions";
 export const NAV = [
   { id: "dashboard",     icon: "⊞",  label: "Dashboard"  },
   { id: "students",      icon: "👤", label: "Students"   },
+  { id: "classes",       icon: "🏫", label: "Classes"    },
   { id: "teachers",      icon: "🎓", label: "Teachers"   },
   { id: "employees",     icon: "🧑‍💼", label: "Employees"  },
   { id: "attendance",    icon: "📋", label: "Attendance" },

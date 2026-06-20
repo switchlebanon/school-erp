@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 import { C } from "../theme";
 import { Badge, Card, SectionTitle } from "../components/Shared";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 import RecordPaymentModal from "./RecordPaymentModal";
 import NewInvoiceModal from "./NewInvoiceModal";
 import InvoicePrint from "./InvoicePrint";
@@ -52,6 +53,9 @@ function PaymentProgress({ invoice }) {
 }
 
 export default function Fees() {
+  const { user } = useAuth();
+  const isParent = user?.role === "PARENT";
+  const isAdmin  = user?.role === "ADMIN";
   const [invoices, setInvoices]             = useState([]);
   const [summary, setSummary]               = useState({ collected: 0, pending: 0, overdue: 0 });
   const [loading, setLoading]               = useState(true);
@@ -102,21 +106,25 @@ export default function Fees() {
           <p style={{ color: C.textMid, fontSize: 13, margin: "2px 0 0" }}>Academic Year 2025–2026</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setShowBulkReminder(true)}
-            style={{
-              background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0",
-              borderRadius: 8, padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer",
-            }}
-          >
-            💬 Bulk Reminders
-          </button>
-          <button
-            onClick={() => setShowNewInvoice(true)}
-            style={{ background: C.accent, color: C.white, border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
-          >
-            + New Invoice
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowBulkReminder(true)}
+              style={{
+                background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0",
+                borderRadius: 8, padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+              }}
+            >
+              💬 Bulk Reminders
+            </button>
+          )}
+          {!isParent && (
+            <button
+              onClick={() => setShowNewInvoice(true)}
+              style={{ background: C.accent, color: C.white, border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+            >
+              + New Invoice
+            </button>
+          )}
         </div>
       </div>
 
@@ -127,21 +135,36 @@ export default function Fees() {
       )}
 
       {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-        {[
-          ["Total Collected", fmt(summary.collected), C.green],
-          ["Pending",         fmt(summary.pending),   C.amber],
-          ["Overdue",         fmt(summary.overdue),   C.red],
-        ].map(([l, v, c]) => (
-          <Card key={l} style={{ borderLeft: `4px solid ${c}`, padding: 14 }}>
-            <div style={{ fontSize: 12, color: C.slate, marginBottom: 4 }}>{l}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: c }}>{v}</div>
-          </Card>
-        ))}
-      </div>
+      {isParent ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          {[
+            ["Total Fees",   fmt(invoices.reduce((s, i) => s + Number(i.amount || 0), 0)),    C.accent],
+            ["Paid",         fmt(invoices.reduce((s, i) => s + Number(i.totalPaid || 0), 0)), C.green],
+            ["Balance Due",  fmt(invoices.reduce((s, i) => s + Math.max(0, Number(i.amount || 0) - Number(i.totalPaid || 0)), 0)), C.amber],
+          ].map(([l, v, c]) => (
+            <Card key={l} style={{ borderLeft: `4px solid ${c}`, padding: 14 }}>
+              <div style={{ fontSize: 12, color: C.slate, marginBottom: 4 }}>{l}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c }}>{v}</div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          {[
+            ["Total Collected", fmt(summary.collected), C.green],
+            ["Pending",         fmt(summary.pending),   C.amber],
+            ["Overdue",         fmt(summary.overdue),   C.red],
+          ].map(([l, v, c]) => (
+            <Card key={l} style={{ borderLeft: `4px solid ${c}`, padding: 14 }}>
+              <div style={{ fontSize: 12, color: C.slate, marginBottom: 4 }}>{l}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c }}>{v}</div>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* Chart */}
-      {chartData.length > 0 && (
+      {/* Chart — admin only */}
+      {!isParent && chartData.length > 0 && (
         <Card style={{ padding: 18 }}>
           <SectionTitle>Monthly Fee Collection</SectionTitle>
           <ResponsiveContainer width="100%" height={180}>
@@ -159,15 +182,17 @@ export default function Fees() {
       {/* Invoices table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "flex", gap: 8, padding: "14px 16px", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search student or description…"
-            style={{
-              flex: 1, minWidth: 180, border: `1px solid ${C.border}`, borderRadius: 8,
-              padding: "7px 12px", fontSize: 13, outline: "none",
-            }}
-          />
+          {!isParent && (
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search student or description…"
+              style={{
+                flex: 1, minWidth: 180, border: `1px solid ${C.border}`, borderRadius: 8,
+                padding: "7px 12px", fontSize: 13, outline: "none",
+              }}
+            />
+          )}
           {["ALL", "PAID", "PENDING", "OVERDUE"].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -188,7 +213,10 @@ export default function Fees() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
               <thead>
                 <tr style={{ background: C.slateL, borderBottom: `2px solid ${C.border}` }}>
-                  {["Student", "Description", "Amount & Progress", "Due Date", "Status", "Actions"].map(h => (
+                  {(isParent
+                    ? ["Child", "Description", "Amount & Progress", "Due Date", "Status", ""]
+                    : ["Student", "Description", "Amount & Progress", "Due Date", "Status", "Actions"]
+                  ).map(h => (
                     <th key={h} style={{ padding: "9px 14px", textAlign: "left", color: C.slate, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
                   ))}
                 </tr>
@@ -214,20 +242,22 @@ export default function Fees() {
                     </td>
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {/* Pay / View button */}
-                        <button
-                          onClick={() => setPayingInvoice(inv)}
-                          style={{
-                            background: inv.status === "PAID" ? C.slateL : C.greenL,
-                            color:      inv.status === "PAID" ? C.slate   : C.green,
-                            border: "none", borderRadius: 6, padding: "5px 10px",
-                            fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-                          }}
-                        >
-                          {inv.status === "PAID" ? "View" : "Pay"}
-                        </button>
-                        {/* WhatsApp reminder button */}
-                        {inv.status !== "PAID" && (
+                        {/* Pay / View button — hidden for parents */}
+                        {!isParent && (
+                          <button
+                            onClick={() => setPayingInvoice(inv)}
+                            style={{
+                              background: inv.status === "PAID" ? C.slateL : C.greenL,
+                              color:      inv.status === "PAID" ? C.slate   : C.green,
+                              border: "none", borderRadius: 6, padding: "5px 10px",
+                              fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                            }}
+                          >
+                            {inv.status === "PAID" ? "View" : "Pay"}
+                          </button>
+                        )}
+                        {/* WhatsApp reminder — admin only */}
+                        {!isParent && inv.status !== "PAID" && (
                           <button
                             onClick={() => setWhatsappInvoice(inv)}
                             title="Send WhatsApp reminder to parent"
@@ -241,7 +271,7 @@ export default function Fees() {
                             💬 Remind
                           </button>
                         )}
-                        {/* Print button */}
+                        {/* Print button — always visible */}
                         <button
                           onClick={() => setPrintInvoice(inv)}
                           style={{

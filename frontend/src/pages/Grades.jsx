@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { C } from "../theme";
 import { Card, SectionTitle, Badge } from "../components/Shared";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const selectStyle = {
   border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px",
@@ -18,6 +19,115 @@ const scoreColor = (pct) => {
 };
 
 export default function Grades() {
+  const { user } = useAuth();
+  if (user?.role === "PARENT" || user?.role === "EMPLOYEE") return <ParentGrades />;
+  return <TeacherGrades />;
+}
+
+// ── Parent/Employee view — read-only grades for their children ────
+function ParentGrades() {
+  const [children, setChildren]   = useState([]);
+  const [selected, setSelected]   = useState(null);
+  const [grades, setGrades]       = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [loadingGrades, setLoadingGrades] = useState(false);
+
+  useEffect(() => {
+    api.get("/students")
+      .then(kids => {
+        const list = Array.isArray(kids) ? kids : [];
+        setChildren(list);
+        if (list.length > 0) setSelected(list[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    setLoadingGrades(true);
+    api.get(`/grades/student/${selected.id}`)
+      .then(data => setGrades(Array.isArray(data) ? data : []))
+      .catch(() => setGrades([]))
+      .finally(() => setLoadingGrades(false));
+  }, [selected]);
+
+  // Group grades by term
+  const byTerm = grades.reduce((acc, g) => {
+    if (!acc[g.term]) acc[g.term] = [];
+    acc[g.term].push(g);
+    return acc;
+  }, {});
+
+  if (loading) return <Card><div style={{ padding: 32, textAlign: "center", color: C.slate }}>Loading…</div></Card>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: C.text }}>Grades</h2>
+        <p style={{ color: C.textMid, fontSize: 13, margin: "2px 0 0" }}>View your children's academic performance</p>
+      </div>
+
+      {children.length === 0 ? (
+        <Card><div style={{ padding: 24, textAlign: "center", color: C.slate }}>No children linked to your account.</div></Card>
+      ) : (
+        <>
+          {children.length > 1 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {children.map(c => (
+                <button key={c.id} onClick={() => setSelected(c)} style={{
+                  padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  border: `1.5px solid ${selected?.id === c.id ? C.accent : C.border}`,
+                  background: selected?.id === c.id ? C.accentL : C.white,
+                  color: selected?.id === c.id ? C.accent : C.textMid, cursor: "pointer",
+                }}>{c.name}</button>
+              ))}
+            </div>
+          )}
+
+          {loadingGrades ? (
+            <Card><div style={{ padding: 24, textAlign: "center", color: C.slate }}>Loading grades…</div></Card>
+          ) : grades.length === 0 ? (
+            <Card><div style={{ padding: 24, textAlign: "center", color: C.slate }}>No grades recorded yet for {selected?.name}.</div></Card>
+          ) : (
+            Object.entries(byTerm).map(([term, termGrades]) => (
+              <Card key={term}>
+                <SectionTitle>{term}</SectionTitle>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                  {termGrades.map(g => {
+                    const pct = g.maxScore ? (Number(g.score) / Number(g.maxScore)) * 100 : null;
+                    const letter = pct === null ? "—" : pct >= 90 ? "A" : pct >= 80 ? "B" : pct >= 70 ? "C" : pct >= 60 ? "D" : "F";
+                    return (
+                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: C.slateL, borderRadius: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: C.text }}>{g.subject || g.subjectName}</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontWeight: 800, fontSize: 16, color: scoreColor(pct) }}>
+                            {g.score !== null ? Number(g.score) : "—"}<span style={{ fontSize: 11, fontWeight: 400, color: C.slate }}>/{g.maxScore}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: C.slate }}>{pct !== null ? pct.toFixed(1) + "%" : ""}</div>
+                        </div>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8, background: scoreColor(pct),
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          color: C.white, fontWeight: 800, fontSize: 14,
+                        }}>{letter}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Teacher/Admin view ────────────────────────────────────────────
+function TeacherGrades() {
   // Filters
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);

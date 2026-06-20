@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C } from "./theme";
 import { useAuth } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
@@ -17,13 +17,31 @@ import ManageUsers from "./pages/ManageUsers";
 import Employees from "./pages/Employees";
 import Payroll from "./pages/Payroll";
 import Expenses from "./pages/Expenses";
+import Classes from "./pages/Classes";
 import { canAccess } from "./permissions";
 import InstallPrompt from "./components/InstallPrompt";
 
 export default function App() {
   const { user, loading, logout } = useAuth();
+
+  // Default landing page per role
+  const defaultPage = (role) => {
+    if (role === "TEACHER")  return "students";
+    if (role === "PARENT")   return "fees";
+    if (role === "STUDENT")  return "grades";
+    if (role === "EMPLOYEE") return "payroll";
+    return "dashboard"; // ADMIN
+  };
+
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+
+  // Listen for navigation events from Dashboard quick actions
+  useEffect(() => {
+    const handler = (e) => setPage(e.detail);
+    window.addEventListener("s3-nav", handler);
+    return () => window.removeEventListener("s3-nav", handler);
+  }, []);
 
   // Still checking for a stored token on first load
   if (loading) {
@@ -56,10 +74,11 @@ export default function App() {
     employees:     <Employees />,
     payroll:       <Payroll />,
     expenses:      <Expenses />,
+    classes:       <Classes />,
   };
 
-  // Guard: if the current page isn't allowed for this role, fall back to dashboard
-  const activePage = canAccess(user.role, page) ? page : "dashboard";
+  // Guard: if the current page isn't allowed for this role, fall back to role's default page
+  const activePage = canAccess(user.role, page) ? page : defaultPage(user.role);
 
   return (
     <>

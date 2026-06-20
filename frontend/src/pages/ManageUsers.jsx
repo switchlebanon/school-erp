@@ -42,6 +42,43 @@ function AddUserModal({ onClose, onDone }) {
   const [error, setError]   = useState("");
   const [saving, setSaving] = useState(false);
 
+  // For STUDENT role — pick an existing student
+  const [students, setStudents] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [studentAccount, setStudentAccount] = useState(null); // result after creation
+  const [searchStudent, setSearchStudent] = useState("");
+
+  // Load students when STUDENT role is selected
+  useEffect(() => {
+    if (role !== "STUDENT") return;
+    setLoadingStudents(true);
+    api.get("/students")
+      .then(data => setStudents(data))
+      .catch(() => {})
+      .finally(() => setLoadingStudents(false));
+  }, [role]);
+
+  const filteredStudents = students.filter(s =>
+    !searchStudent ||
+    s.name?.toLowerCase().includes(searchStudent.toLowerCase()) ||
+    s.studentCode?.toLowerCase().includes(searchStudent.toLowerCase())
+  );
+
+  const handleCreateStudentAccount = async () => {
+    if (!selectedStudentId) { setError("Please select a student."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const result = await api.post(`/students/${selectedStudentId}/account`);
+      setStudentAccount(result);
+    } catch (err) {
+      setError(err.message || "Failed to create student account");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -75,72 +112,195 @@ function AddUserModal({ onClose, onDone }) {
       zIndex: 200, padding: 16,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: C.white, borderRadius: 14, padding: 24, width: 420,
-        maxWidth: "100%", boxShadow: "0 8px 32px rgba(15,23,42,0.18)",
+        background: C.white, borderRadius: 14, padding: 24, width: 440,
+        maxWidth: "100%", maxHeight: "92vh", overflowY: "auto",
+        boxShadow: "0 8px 32px rgba(15,23,42,0.18)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>Add User Account</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.slate }}>✕</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Full Name</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sara Gemayel" style={inputStyle} />
+        {/* Role selector always visible */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Role</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ROLES.map(r => (
+              <button key={r} type="button" onClick={() => { setRole(r); setError(""); setStudentAccount(null); setSelectedStudentId(""); }} style={{
+                padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                border: `1px solid ${role === r ? C.accent : C.border}`,
+                background: role === r ? C.accentL : C.white,
+                color: role === r ? C.accent : C.textMid, cursor: "pointer",
+              }}>{r.charAt(0) + r.slice(1).toLowerCase()}</button>
+            ))}
           </div>
+        </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. sara@scube.test" style={inputStyle} />
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Role</label>
-              <select value={role} onChange={e => setRole(e.target.value)} style={inputStyle}>
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+        {/* ── STUDENT: pick existing student ── */}
+        {role === "STUDENT" && (
+          <div>
+            <div style={{ background: C.accentL, borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13, color: C.accent, fontWeight: 600 }}>
+              🎓 Student accounts are linked to an existing student record. Select the student below to auto-generate their login.
             </div>
-            <div style={{ flex: 1 }}>
+
+            {studentAccount ? (
+              // Success screen
+              <div style={{ background: C.greenL, border: `1px solid ${C.green}40`, borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+                  ✓ Login Account Created
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                  <span style={{ color: C.slate }}>Email</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace" }}>{studentAccount.email}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: C.slate }}>Password</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace" }}>{studentAccount.password}</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.textMid, marginTop: 8 }}>
+                  Save this now — the password won't be shown again.
+                </div>
+                <button onClick={onDone} style={{
+                  marginTop: 14, width: "100%", background: C.green, color: C.white,
+                  border: "none", borderRadius: 8, padding: "9px 0", fontWeight: 600,
+                  fontSize: 13, cursor: "pointer",
+                }}>Done</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Search Student</label>
+                  <input
+                    value={searchStudent}
+                    onChange={e => setSearchStudent(e.target.value)}
+                    placeholder="Type name or student code..."
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 14, maxHeight: 220, overflowY: "auto" }}>
+                  {loadingStudents ? (
+                    <div style={{ padding: 16, textAlign: "center", color: C.slate, fontSize: 13 }}>Loading students…</div>
+                  ) : filteredStudents.length === 0 ? (
+                    <div style={{ padding: 16, textAlign: "center", color: C.slate, fontSize: 13 }}>No students found</div>
+                  ) : filteredStudents.map((s, i) => {
+                    const hasAccount = !!s.userId;
+                    const isSelected = String(s.id) === String(selectedStudentId);
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => !hasAccount && setSelectedStudentId(String(s.id))}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 12px", cursor: hasAccount ? "not-allowed" : "pointer",
+                          borderTop: i > 0 ? `1px solid ${C.border}` : "none",
+                          background: isSelected ? C.accentL : hasAccount ? C.slateL : C.white,
+                          opacity: hasAccount ? 0.6 : 1,
+                        }}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                          border: `2px solid ${isSelected ? C.accent : C.border}`,
+                          background: isSelected ? C.accent : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, color: C.white,
+                        }}>{isSelected ? "✓" : ""}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.name}</div>
+                          <div style={{ fontSize: 11, color: C.slate }}>
+                            {s.studentCode} · {s.section?.gradeLevel?.name} {s.section?.name}
+                            {hasAccount && <span style={{ color: C.amber, marginLeft: 6 }}>⚠ Already has account</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {error && (
+                  <div style={{ background: C.redL, color: C.red, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 8, marginBottom: 14 }}>
+                    {error}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button type="button" onClick={onClose} style={{
+                    flex: 1, background: C.slateL, color: C.textMid, border: "none", borderRadius: 8,
+                    padding: "9px 0", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                  }}>Cancel</button>
+                  <button
+                    type="button"
+                    onClick={handleCreateStudentAccount}
+                    disabled={!selectedStudentId || saving}
+                    style={{
+                      flex: 2, background: selectedStudentId ? C.accent : C.border,
+                      color: C.white, border: "none", borderRadius: 8,
+                      padding: "9px 0", fontWeight: 600, fontSize: 13,
+                      cursor: selectedStudentId && !saving ? "pointer" : "default",
+                      opacity: saving ? 0.7 : 1,
+                    }}
+                  >
+                    {saving ? "Creating…" : "Create Student Login"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Non-STUDENT roles: standard form ── */}
+        {role !== "STUDENT" && (
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Full Name</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sara Gemayel" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. sara@scube.test" style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Phone (optional)</label>
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+961 ..." style={inputStyle} />
             </div>
-          </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Temporary Password</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" style={{ ...inputStyle, flex: 1 }} />
-              <button type="button" onClick={() => setPassword(generatePassword())} style={{
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Temporary Password</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" style={{ ...inputStyle, flex: 1 }} />
+                <button type="button" onClick={() => setPassword(generatePassword())} style={{
+                  background: C.slateL, color: C.textMid, border: "none", borderRadius: 8,
+                  padding: "0 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                }}>Generate</button>
+              </div>
+              <div style={{ fontSize: 11, color: C.slate, marginTop: 4 }}>
+                Share this with the user — they can change it later in My Account.
+              </div>
+            </div>
+
+            {error && (
+              <div style={{ background: C.redL, color: C.red, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 8, marginBottom: 14 }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={onClose} style={{
                 background: C.slateL, color: C.textMid, border: "none", borderRadius: 8,
-                padding: "0 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-              }}>Generate</button>
+                padding: "9px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+              }}>Cancel</button>
+              <button type="submit" disabled={saving} style={{
+                background: C.accent, color: C.white, border: "none", borderRadius: 8,
+                padding: "9px 20px", fontWeight: 600, fontSize: 13,
+                cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+              }}>
+                {saving ? "Creating…" : "Create Account"}
+              </button>
             </div>
-            <div style={{ fontSize: 11, color: C.slate, marginTop: 4 }}>
-              Share this with the user — they can change it later in My Account.
-            </div>
-          </div>
-
-          {error && (
-            <div style={{ background: C.redL, color: C.red, fontSize: 12, fontWeight: 500, padding: "8px 12px", borderRadius: 8, marginBottom: 14 }}>
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button type="button" onClick={onClose} style={{
-              background: C.slateL, color: C.textMid, border: "none", borderRadius: 8,
-              padding: "9px 18px", fontWeight: 600, fontSize: 13, cursor: "pointer",
-            }}>Cancel</button>
-            <button type="submit" disabled={saving} style={{
-              background: C.accent, color: C.white, border: "none", borderRadius: 8,
-              padding: "9px 20px", fontWeight: 600, fontSize: 13,
-              cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
-            }}>
-              {saving ? "Creating…" : "Create Account"}
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );

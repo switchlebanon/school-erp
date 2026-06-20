@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { C } from "../theme";
 import { Card } from "../components/Shared";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const STATUSES = [
   { key: "PRESENT", label: "Present", icon: "✓", color: C.green, bg: C.greenL },
@@ -15,6 +16,12 @@ const statusInfo = (key) => STATUSES.find(s => s.key === key) || STATUSES[0];
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function Attendance() {
+  const { user } = useAuth();
+  if (user?.role === "PARENT") return <ParentAttendance />;
+  return <TeacherAttendance />;
+}
+
+function TeacherAttendance() {
   const [sections, setSections] = useState([]);
   const [sectionId, setSectionId] = useState("");
   const [date, setDate] = useState(todayStr());
@@ -264,6 +271,115 @@ export default function Attendance() {
       <div style={{ fontSize: 11, color: C.slate, textAlign: "center" }}>
         Click a status button to mark each student. Changed rows are highlighted until saved.
       </div>
+    </div>
+  );
+}
+
+// Parent view — shows attendance history for each of their children
+function ParentAttendance() {
+  const [children, setChildren] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [records, setRecords]   = useState([]);
+  const [yearly, setYearly]     = useState(null);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    api.get("/students")
+      .then(kids => {
+        setChildren(Array.isArray(kids) ? kids : []);
+        if (kids.length > 0) setSelected(kids[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    Promise.all([
+      api.get(`/attendance/student/${selected.id}?limit=30`),
+      api.get(`/attendance/yearly/${selected.id}`),
+    ])
+      .then(([recs, yr]) => { setRecords(recs); setYearly(yr); })
+      .catch(() => {});
+  }, [selected]);
+
+  if (loading) return <Card><div style={{ padding: 32, textAlign: "center", color: C.slate }}>Loading…</div></Card>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: C.text }}>Attendance</h2>
+        <p style={{ color: C.textMid, fontSize: 13, margin: "2px 0 0" }}>View your children's attendance records</p>
+      </div>
+
+      {children.length === 0 ? (
+        <Card><div style={{ padding: 24, textAlign: "center", color: C.slate }}>No children linked to your account.</div></Card>
+      ) : (
+        <>
+          {/* Child selector */}
+          {children.length > 1 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {children.map(c => (
+                <button key={c.id} onClick={() => setSelected(c)} style={{
+                  padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  border: `1.5px solid ${selected?.id === c.id ? C.accent : C.border}`,
+                  background: selected?.id === c.id ? C.accentL : C.white,
+                  color: selected?.id === c.id ? C.accent : C.textMid, cursor: "pointer",
+                }}>{c.name}</button>
+              ))}
+            </div>
+          )}
+
+          {selected && yearly && (
+            <Card>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>
+                {selected.name} — Academic Year {yearly.academicYear}
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
+                {[
+                  { label: "Counted Absences", value: yearly.counted, color: yearly.counted > 0 ? C.red : C.text },
+                  { label: "Excused", value: yearly.excused, color: C.accent },
+                  { label: "Late", value: yearly.late, color: C.amber },
+                  { label: "Present", value: yearly.present, color: C.green },
+                ].map(s => (
+                  <div key={s.label}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: C.slate }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.textMid }}>Excused absences (with reason) don't count toward the limit.</div>
+            </Card>
+          )}
+
+          {/* Recent records */}
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}`, fontWeight: 600, fontSize: 13, color: C.text }}>
+              Recent Attendance — {selected?.name}
+            </div>
+            {records.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: C.slate, fontSize: 13 }}>No attendance records yet.</div>
+            ) : (
+              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+                {records.map(r => {
+                  const info = statusInfo(r.status);
+                  return (
+                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 8, background: info.bg + "80", gap: 10 }}>
+                      <span style={{ fontSize: 13, color: C.textMid }}>
+                        {new Date(r.date).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                      {r.reason && <span style={{ fontSize: 12, color: C.slate, flex: 1 }}>{r.reason}</span>}
+                      <span style={{ fontSize: 12, fontWeight: 700, color: info.color, background: info.bg, padding: "2px 9px", borderRadius: 20, whiteSpace: "nowrap" }}>
+                        {info.icon} {info.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -103,6 +103,89 @@ async function deleteSection(req, res) {
   }
 }
 
+// PUT /api/sections/:id
+// Body: { name }
+async function updateSection(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { name } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "name is required" });
+    }
+    const section = await prisma.section.update({
+      where: { id },
+      data: { name: String(name).trim() },
+      include: { gradeLevel: true },
+    });
+    res.json(section);
+  } catch (err) {
+    console.error("updateSection error:", err);
+    if (err.code === "P2025") return res.status(404).json({ error: "Section not found" });
+    res.status(500).json({ error: "Failed to update section" });
+  }
+}
+
+// PUT /api/sections/grade-levels/:id
+// Body: { name }
+async function updateGradeLevel(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { name, order } = req.body;
+    if (!name && order === undefined) {
+      return res.status(400).json({ error: "name or order is required" });
+    }
+    const grade = await prisma.gradeLevel.update({
+      where: { id },
+      data: {
+        ...(name  !== undefined && { name: String(name).trim() }),
+        ...(order !== undefined && { order: Number(order) }),
+      },
+    });
+    res.json(grade);
+  } catch (err) {
+    console.error("updateGradeLevel error:", err);
+    if (err.code === "P2025") return res.status(404).json({ error: "Grade level not found" });
+    res.status(500).json({ error: "Failed to update grade level" });
+  }
+}
+
+// POST /api/sections/grade-levels/reorder
+// Body: { ids: [1, 3, 2, ...] } — ordered list of grade level IDs
+// Sets order = index position for each
+async function reorderGradeLevels(req, res) {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: "ids array is required" });
+
+    await Promise.all(
+      ids.map((id, index) =>
+        prisma.gradeLevel.update({ where: { id: Number(id) }, data: { order: index } })
+      )
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("reorderGradeLevels error:", err);
+    res.status(500).json({ error: "Failed to reorder grade levels" });
+  }
+}
+
+// DELETE /api/sections/grade-levels/:id
+async function deleteGradeLevel(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const sectionCount = await prisma.section.count({ where: { gradeLevelId: id } });
+    if (sectionCount > 0) {
+      return res.status(400).json({ error: `Cannot delete: ${sectionCount} section(s) belong to this grade level` });
+    }
+    await prisma.gradeLevel.delete({ where: { id } });
+    res.status(204).send();
+  } catch (err) {
+    console.error("deleteGradeLevel error:", err);
+    if (err.code === "P2025") return res.status(404).json({ error: "Grade level not found" });
+    res.status(500).json({ error: "Failed to delete grade level" });
+  }
+}
+
 // GET /api/sections/subjects
 // Returns all subjects (for dropdowns in Grades, Timetable, etc.)
 async function getSubjects(req, res) {
@@ -160,4 +243,8 @@ async function createSubject(req, res) {
   }
 }
 
-module.exports = { getSections, getGradeLevels, createSection, deleteSection, getSubjects, createSubject };
+module.exports = {
+  getSections, getGradeLevels, createSection, deleteSection,
+  updateSection, updateGradeLevel, deleteGradeLevel, reorderGradeLevels,
+  getSubjects, createSubject,
+};

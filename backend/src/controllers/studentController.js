@@ -3,25 +3,106 @@ const bcrypt = require("bcryptjs");
 
 // ── Auto-generated student login credentials ──────────────────────
 
-// Generates a readable random password, e.g. "kx7-mP2q-9wTr"
-function generateStudentPassword() {
+function generatePassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let pw = "";
   for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
   return pw;
 }
 
-// Builds a login email from a student code, e.g. "STU-2026-007" -> "stu-2026-007@students.scube.local"
+// Builds a login email from a student code
 function studentEmailFromCode(studentCode) {
   const slug = String(studentCode).trim().toLowerCase().replace(/[^a-z0-9]/g, "-");
   return `${slug}@students.scube.local`;
 }
 
 /**
+ * Builds a parent login email from guardian name.
+ * Format: firstname.lastname@parents.s3.local
+ * If taken: firstname.X.lastname@parents.s3.local (X = student's last name first letter)
+ *
+ * e.g. "Hassan Khalil" -> hassan.khalil@parents.s3.local
+ * if taken + student name "Chloe Deeb" -> hassan.d.khalil@parents.s3.local
+ */
+async function buildParentEmail(guardianName, studentName) {
+  const parts = String(guardianName).trim().toLowerCase().split(/\s+/).map(p => p.replace(/[^a-z]/g, ""));
+  const first = parts[0] || "parent";
+  const last  = parts[parts.length - 1] || "user";
+
+  const baseEmail = `${first}.${last}@parents.s3.local`;
+  const existing  = await prisma.user.findUnique({ where: { email: baseEmail } });
+  if (!existing) return baseEmail;
+
+  // Add student's last name initial as middle disambiguator
+  const studentParts = String(studentName || "").trim().toLowerCase().split(/\s+/);
+  const studentLastInitial = (studentParts[studentParts.length - 1] || "x")[0];
+  const altEmail = `${first}.${studentLastInitial}.${last}@parents.s3.local`;
+
+  const existingAlt = await prisma.user.findUnique({ where: { email: altEmail } });
+  if (!existingAlt) return altEmail;
+
+  // Last resort: add a counter
+  let counter = 2;
+  while (true) {
+    const countedEmail = `${first}.${last}${counter}@parents.s3.local`;
+    const existingCounted = await prisma.user.findUnique({ where: { email: countedEmail } });
+    if (!existingCounted) return countedEmail;
+    counter++;
+  }
+}
+
+/**
+ * Finds or creates a PARENT-role user account for a guardian.
+ * - If a PARENT user with the same phone number already exists → reuse it
+ * - Otherwise → create a new account from guardian name
+ * Returns { id, email, password?, isExisting }
+ */
+async function findOrCreateParentAccount(guardianName, guardianPhone, student) {
+  const cleanPhone = String(guardianPhone).trim();
+
+  // Look for an existing PARENT user with this phone number
+  const existingByPhone = await prisma.user.findFirst({
+    where: { role: "PARENT", phone: cleanPhone },
+  });
+
+  if (existingByPhone) {
+    // Link this existing parent to the new student
+    await prisma.student.update({
+      where: { id: student.id },
+      data:  { guardianId: existingByPhone.id },
+    });
+    return {
+      id: existingByPhone.id,
+      email: existingByPhone.email,
+      isExisting: true, // no password to show — they already have one
+    };
+  }
+
+  // No existing parent found — create a new account
+  const email = await buildParentEmail(guardianName, student.name);
+  const plainPassword = generatePassword();
+  const hashed = await bcrypt.hash(plainPassword, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      name:     String(guardianName).trim(),
+      email,
+      password: hashed,
+      role:     "PARENT",
+      phone:    cleanPhone,
+    },
+  });
+
+  await prisma.student.update({
+    where: { id: student.id },
+    data:  { guardianId: user.id },
+  });
+
+  return { id: user.id, email, password: plainPassword, isExisting: false };
+}
+
+/**
  * Creates a STUDENT-role user account for a given student record.
- * Returns { id, email, password } (plaintext password included once,
- * for the admin to share — it is NOT stored anywhere in plaintext).
- * If an account with this email already exists, returns null (skip).
  */
 async function createStudentAccount(student) {
   const email = studentEmailFromCode(student.studentCode);
@@ -29,7 +110,7 @@ async function createStudentAccount(student) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return null;
 
-  const plainPassword = generateStudentPassword();
+  const plainPassword = generatePassword();
   const hashed = await bcrypt.hash(plainPassword, 10);
 
   const user = await prisma.user.create({
@@ -123,37 +204,67 @@ async function getStudentById(req, res) {
   }
 }
 
+// Generates a student code: S3-YYYYMMDD-XXX
+// e.g. S3-20150322-047
+async function generateStudentCode(dateOfBirth) {
+  const dob = new Date(dateOfBirth);
+  const dobStr = dob.getFullYear().toString() +
+    String(dob.getMonth() + 1).padStart(2, "0") +
+    String(dob.getDate()).padStart(2, "0");
+
+  // Count existing students to get next sequential number
+  const count = await prisma.student.count();
+  const seq = String(count + 1).padStart(3, "0");
+
+  return `S3-${dobStr}-${seq}`;
+}
+
 // POST /api/students
 async function createStudent(req, res) {
   try {
-    const { studentCode, name, dateOfBirth, sectionId, guardianId, status, guardianName, guardianPhone } = req.body;
+    const { name, dateOfBirth, sectionId, guardianId, status, guardianName, guardianPhone } = req.body;
 
-    if (!studentCode || !name || !sectionId) {
-      return res.status(400).json({ error: "studentCode, name and sectionId are required" });
+    if (!name || !sectionId) {
+      return res.status(400).json({ error: "name and sectionId are required" });
     }
+    if (!dateOfBirth) {
+      return res.status(400).json({ error: "Date of birth is required" });
+    }
+    if (!guardianName || !String(guardianName).trim()) {
+      return res.status(400).json({ error: "Guardian name is required" });
+    }
+    if (!guardianPhone || !String(guardianPhone).trim()) {
+      return res.status(400).json({ error: "Guardian WhatsApp number is required" });
+    }
+
+    // Auto-generate student code
+    const studentCode = await generateStudentCode(dateOfBirth);
 
     const student = await prisma.student.create({
       data: {
         studentCode,
         name,
-        dateOfBirth:   dateOfBirth ? new Date(dateOfBirth) : null,
+        dateOfBirth:   new Date(dateOfBirth),
         sectionId:     Number(sectionId),
         guardianId:    guardianId ? Number(guardianId) : null,
         status:        status || "ACTIVE",
-        guardianName:  guardianName?.trim() || null,
-        guardianPhone: guardianPhone?.trim() || null,
+        guardianName:  guardianName.trim(),
+        guardianPhone: guardianPhone.trim(),
       },
       include: { section: { include: { gradeLevel: true } } },
     });
 
-    // Auto-create a STUDENT login account for this student
-    const account = await createStudentAccount(student);
+    // Auto-create student login account
+    const studentAccount = await createStudentAccount(student);
 
-    res.status(201).json({ ...student, account });
+    // Find existing parent account by phone, or create a new one
+    const parentAccount = await findOrCreateParentAccount(guardianName, guardianPhone, student);
+
+    res.status(201).json({ ...student, account: studentAccount, parentAccount });
   } catch (err) {
     console.error("createStudent error:", err);
     if (err.code === "P2002") {
-      return res.status(409).json({ error: "Student code already exists" });
+      return res.status(409).json({ error: "Student code already exists — please try again" });
     }
     res.status(500).json({ error: "Failed to create student" });
   }
@@ -193,7 +304,29 @@ async function updateStudent(req, res) {
 async function deleteStudent(req, res) {
   try {
     const id = Number(req.params.id);
+
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+
+    // Delete related records first
+    await prisma.attendance.deleteMany({ where: { studentId: id } });
+    await prisma.gradeRecord.deleteMany({ where: { studentId: id } });
+
+    // Delete fee payments before invoices
+    const invoices = await prisma.feeInvoice.findMany({ where: { studentId: id }, select: { id: true } });
+    for (const inv of invoices) {
+      await prisma.payment.deleteMany({ where: { invoiceId: inv.id } });
+    }
+    await prisma.feeInvoice.deleteMany({ where: { studentId: id } });
+
+    // Delete the student record itself
     await prisma.student.delete({ where: { id } });
+
+    // Delete the student login account if it exists
+    if (student.userId) {
+      await prisma.user.delete({ where: { id: student.userId } }).catch(() => {});
+    }
+
     res.status(204).send();
   } catch (err) {
     console.error("deleteStudent error:", err);
@@ -280,7 +413,18 @@ async function bulkImportStudents(req, res) {
         // Auto-create a STUDENT login account for this student
         const account = await createStudentAccount(created);
 
-        results.push({ row: rowNum, status: "created", student: created, account });
+        // Auto-create (or link to an existing) PARENT account, same as
+        // the single Add Student flow — only when guardian info was provided.
+        let parentAccount = null;
+        if (row.guardianName && row.guardianPhone) {
+          parentAccount = await findOrCreateParentAccount(
+            String(row.guardianName).trim(),
+            String(row.guardianPhone).trim(),
+            created
+          );
+        }
+
+        results.push({ row: rowNum, status: "created", student: created, account, parentAccount });
       } catch (err) {
         console.error(`bulkImportStudents row ${rowNum} error:`, err);
         results.push({ row: rowNum, status: "error", error: err.message || "Unknown error", data: row });

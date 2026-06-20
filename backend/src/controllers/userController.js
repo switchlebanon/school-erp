@@ -151,6 +151,17 @@ async function deleteUser(req, res) {
       return res.status(400).json({ error: "You cannot delete your own account" });
     }
 
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // If deleting a PARENT, unlink them from all their students first
+    if (user.role === "PARENT") {
+      await prisma.student.updateMany({
+        where: { guardianId: id },
+        data:  { guardianId: null },
+      });
+    }
+
     await prisma.user.delete({ where: { id } });
     res.status(204).send();
   } catch (err) {

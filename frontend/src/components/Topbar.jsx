@@ -3,9 +3,6 @@ import { C } from "../theme";
 import { NAV } from "./Sidebar";
 import { downloadFile } from "../api/client";
 
-// Maps page IDs to their export endpoint + filename + label.
-// Pages without a backend export (e.g. dashboard, account, timetable)
-// are omitted — those won't show a "Backup this page" option.
 const PAGE_EXPORTS = {
   students:      { path: "/export/students",      file: "scube-students.xlsx",      label: "Students" },
   teachers:      { path: "/export/teachers",       file: "scube-teachers.xlsx",      label: "Teachers" },
@@ -19,10 +16,13 @@ const PAGE_EXPORTS = {
   users:         { path: "/export/users",          file: "scube-users.xlsx",         label: "Users" },
 };
 
-export default function Topbar({ page, user }) {
-  const label = page === "account" ? "My Account" : page === "users" ? "Manage Users" : (NAV.find(n => n.id === page)?.label ?? "Dashboard");
+export default function Topbar({ page, user, onMenuToggle, sidebarOpen }) {
+  const label = page === "account" ? "My Account"
+              : page === "users"   ? "Manage Users"
+              : (NAV.find(n => n.id === page)?.label ?? "Dashboard");
   const initial = user?.name?.charAt(0)?.toUpperCase() || "?";
   const isAdmin = user?.role === "ADMIN";
+  const mobile = window.innerWidth < 768;
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -31,7 +31,6 @@ export default function Topbar({ page, user }) {
 
   const pageExport = PAGE_EXPORTS[page];
 
-  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e) => {
@@ -58,14 +57,32 @@ export default function Topbar({ page, user }) {
   return (
     <div style={{
       height: 56, background: C.white, borderBottom: `1px solid ${C.border}`,
-      display: "flex", alignItems: "center", padding: "0 28px",
-      gap: 12, flexShrink: 0,
+      display: "flex", alignItems: "center",
+      padding: mobile ? "0 12px" : "0 28px",
+      gap: mobile ? 8 : 12, flexShrink: 0,
     }}>
-      <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{label}</span>
+      {/* Hamburger — mobile only */}
+      {mobile && (
+        <button
+          onClick={onMenuToggle}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 22, color: C.text, padding: "4px 6px",
+            display: "flex", alignItems: "center", flexShrink: 0,
+          }}
+          aria-label="Toggle menu"
+        >
+          {sidebarOpen ? "✕" : "☰"}
+        </button>
+      )}
+
+      <span style={{ fontSize: mobile ? 15 : 18, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
+      </span>
       <span style={{ flex: 1 }} />
 
       {exportError && (
-        <span style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>{exportError}</span>
+        <span style={{ fontSize: 12, color: C.red, fontWeight: 600, whiteSpace: "nowrap" }}>{exportError}</span>
       )}
 
       {isAdmin && (
@@ -75,14 +92,15 @@ export default function Topbar({ page, user }) {
             disabled={exporting}
             title="Download data as Excel"
             style={{
-              display: "flex", alignItems: "center", gap: 6,
+              display: "flex", alignItems: "center", gap: 4,
               background: C.accentL, color: C.accent, border: "none",
-              borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 600,
+              borderRadius: 8, padding: mobile ? "7px 10px" : "7px 14px",
+              fontSize: mobile ? 11.5 : 12.5, fontWeight: 600,
               cursor: exporting ? "default" : "pointer", opacity: exporting ? 0.6 : 1,
               whiteSpace: "nowrap",
             }}
           >
-            {exporting ? "Exporting…" : "📥 Backup ▾"}
+            {exporting ? "…" : mobile ? "📥▾" : "📥 Backup ▾"}
           </button>
 
           {menuOpen && (
@@ -90,7 +108,7 @@ export default function Topbar({ page, user }) {
               position: "absolute", top: "calc(100% + 6px)", right: 0,
               background: C.white, border: `1px solid ${C.border}`, borderRadius: 10,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)", minWidth: 200,
-              zIndex: 50, overflow: "hidden", padding: 4,
+              zIndex: 150, overflow: "hidden", padding: 4,
             }}>
               {pageExport && (
                 <>
@@ -131,11 +149,12 @@ export default function Topbar({ page, user }) {
       <div style={{
         width: 32, height: 32, borderRadius: 8, background: C.accentL,
         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        flexShrink: 0,
       }}>🔔</div>
       <div style={{
         width: 32, height: 32, borderRadius: "50%", background: C.accent,
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: C.white, fontWeight: 700, fontSize: 13,
+        color: C.white, fontWeight: 700, fontSize: 13, flexShrink: 0,
       }}>{initial}</div>
     </div>
   );

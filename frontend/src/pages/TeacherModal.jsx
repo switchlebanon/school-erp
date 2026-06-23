@@ -25,7 +25,6 @@ export default function TeacherModal({ onClose, onDone, teacher }) {
   const [loadingSubjects, setLoadingSubjects] = useState(true);
 
   const [name, setName]   = useState(teacher?.user?.name || "");
-  const [email, setEmail] = useState(teacher?.user?.email || "");
   const [phone, setPhone] = useState(teacher?.user?.phone || "");
   const [status, setStatus] = useState(teacher?.status || "ACTIVE");
   const [selectedSubjects, setSelectedSubjects] = useState(
@@ -80,7 +79,7 @@ export default function TeacherModal({ onClose, onDone, teacher }) {
     setError("");
 
     if (!name.trim()) { setError("Name is required."); return; }
-    if (!isEdit && !email.trim()) { setError("Email is required."); return; }
+    if (!phone.trim()) { setError("Phone number is required."); return; }
 
     setSubmitting(true);
     try {
@@ -95,7 +94,6 @@ export default function TeacherModal({ onClose, onDone, teacher }) {
       } else {
         const created = await api.post("/teachers", {
           name: name.trim(),
-          email: email.trim(),
           phone: phone.trim() || undefined,
           status,
           subjectIds: [...selectedSubjects],
@@ -195,16 +193,17 @@ export default function TeacherModal({ onClose, onDone, teacher }) {
           </div>
 
           {!isEdit && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. rana.aoun@scube.test" style={inputStyle} />
+            <div style={{ marginBottom: 12, background: "#F1F5F9", borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ fontSize: 12, color: "#64748B" }}>
+                📧 Email will be auto-generated as <b>firstname.lastname@teachers.scube.com</b>
+              </span>
             </div>
           )}
 
           <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Phone (optional)</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+961 ..." style={inputStyle} />
+              <label style={labelStyle}>Phone <span style={{color:"#EF4444"}}>*</span></label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+961 ..." style={{...inputStyle, border: `1px solid ${!phone.trim() ? C.red : C.border}`}} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Status</label>

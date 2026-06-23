@@ -15,11 +15,11 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
   const isEdit = Boolean(employee);
 
   const [name, setName]   = useState(employee?.user?.name || "");
-  const [email, setEmail] = useState(employee?.user?.email || "");
   const [phone, setPhone] = useState(employee?.user?.phone || "");
   const [jobTitle, setJobTitle] = useState(employee?.jobTitle || "");
   const [baseSalary, setBaseSalary] = useState(employee?.baseSalary != null ? String(employee.baseSalary) : "");
   const [status, setStatus] = useState(employee?.status || "ACTIVE");
+  const [department, setDepartment] = useState(employee?.department || "OTHER");
 
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -28,14 +28,25 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
   const [resetting, setResetting] = useState(false);
 
   const COMMON_TITLES = ["Accountant", "Administrative Assistant", "Janitor", "IT Support", "Librarian", "Security", "Driver", "Nurse"];
+  const DEPARTMENTS = [
+    { value: "ADMINISTRATION",    label: "Administration" },
+    { value: "TEACHING_SUPPORT",  label: "Teaching Support" },
+    { value: "FINANCE",           label: "Finance" },
+    { value: "FACILITIES",        label: "Facilities" },
+    { value: "IT",                label: "IT" },
+    { value: "SECURITY",          label: "Security" },
+    { value: "TRANSPORT",         label: "Transport" },
+    { value: "HEALTH",            label: "Health" },
+    { value: "OTHER",             label: "Other" },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
     if (!name.trim()) { setError("Name is required."); return; }
-    if (!isEdit && !email.trim()) { setError("Email is required."); return; }
     if (!jobTitle.trim()) { setError("Job title is required."); return; }
+    if (!phone.trim()) { setError("Phone number is required."); return; }
 
     setSubmitting(true);
     try {
@@ -44,6 +55,7 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
           name: name.trim(),
           phone: phone.trim() || null,
           jobTitle: jobTitle.trim(),
+          department,
           baseSalary: baseSalary === "" ? null : Number(baseSalary),
           status,
         });
@@ -51,7 +63,6 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
       } else {
         const created = await api.post("/employees", {
           name: name.trim(),
-          email: email.trim(),
           phone: phone.trim() || undefined,
           jobTitle: jobTitle.trim(),
           baseSalary: baseSalary === "" ? undefined : Number(baseSalary),
@@ -152,11 +163,19 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
           </div>
 
           {!isEdit && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. joseph.matta@scube.test" style={inputStyle} />
+            <div style={{ marginBottom: 12, background: "#F1F5F9", borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ fontSize: 12, color: "#64748B" }}>
+                📧 Email will be auto-generated as <b>firstname.lastname@employees.scube.com</b>
+              </span>
             </div>
           )}
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Department</label>
+            <select value={department} onChange={e => setDepartment(e.target.value)} style={inputStyle}>
+              {DEPARTMENTS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
 
           <div style={{ marginBottom: 12 }}>
             <label style={labelStyle}>Job Title</label>
@@ -194,8 +213,8 @@ export default function EmployeeModal({ onClose, onDone, employee }) {
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Phone (optional)</label>
-            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+961 ..." style={inputStyle} />
+            <label style={labelStyle}>Phone <span style={{color:"#EF4444"}}>*</span></label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+961 ..." style={{...inputStyle, border: `1px solid ${!phone.trim() ? C.red : C.border}`}} />
           </div>
 
           {/* Reset password (edit mode only) */}

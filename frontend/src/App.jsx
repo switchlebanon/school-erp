@@ -21,29 +21,46 @@ import Classes from "./pages/Classes";
 import { canAccess } from "./permissions";
 import InstallPrompt from "./components/InstallPrompt";
 
+const isMobile = () => window.innerWidth < 768;
+
 export default function App() {
   const { user, loading, logout } = useAuth();
 
-  // Default landing page per role
   const defaultPage = (role) => {
     if (role === "TEACHER")  return "students";
     if (role === "PARENT")   return "fees";
     if (role === "STUDENT")  return "grades";
     if (role === "EMPLOYEE") return "payroll";
-    return "dashboard"; // ADMIN
+    return "dashboard";
   };
 
   const [page, setPage] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+  // On mobile: sidebar starts closed. On desktop: starts open.
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile());
+
+  // Close sidebar on mobile when navigating to a new page
+  const handleNav = (p) => {
+    setPage(p);
+    if (isMobile()) setSidebarOpen(false);
+  };
 
   // Listen for navigation events from Dashboard quick actions
   useEffect(() => {
-    const handler = (e) => setPage(e.detail);
+    const handler = (e) => handleNav(e.detail);
     window.addEventListener("s3-nav", handler);
     return () => window.removeEventListener("s3-nav", handler);
   }, []);
 
-  // Still checking for a stored token on first load
+  // On window resize: auto-open sidebar when going to desktop, close when going mobile
+  useEffect(() => {
+    const onResize = () => {
+      if (!isMobile()) setSidebarOpen(true);
+      else setSidebarOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   if (loading) {
     return (
       <div style={{
@@ -55,10 +72,7 @@ export default function App() {
     );
   }
 
-  // Not logged in -> show login page
-  if (!user) {
-    return <Login />;
-  }
+  if (!user) return <Login />;
 
   const pages = {
     dashboard:     <Dashboard user={user} />,
@@ -77,23 +91,61 @@ export default function App() {
     classes:       <Classes />,
   };
 
-  // Guard: if the current page isn't allowed for this role, fall back to role's default page
   const activePage = canAccess(user.role, page) ? page : defaultPage(user.role);
+  const mobile = isMobile();
 
   return (
     <>
-      <div style={{ display: "flex", height: "100vh", fontFamily: "'Inter', -apple-system, sans-serif", background: C.slateL, overflow: "hidden" }}>
-        <Sidebar
-          active={activePage}
-          onNav={setPage}
-          open={sidebarOpen}
-          onToggle={() => setSidebarOpen(o => !o)}
-          user={user}
-          onLogout={logout}
-        />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <Topbar page={activePage} user={user} />
-          <main style={{ flex: 1, overflowY: "auto", padding: window.innerWidth > 768 ? "22px 24px" : "14px 12px" }}>
+      <div style={{
+        display: "flex", height: "100vh",
+        fontFamily: "'Inter', -apple-system, sans-serif",
+        background: C.slateL, overflow: "hidden",
+        position: "relative",
+      }}>
+
+        {/* Mobile backdrop — tap to close sidebar */}
+        {mobile && sidebarOpen && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
+              zIndex: 99, backdropFilter: "blur(1px)",
+            }}
+          />
+        )}
+
+        {/* Sidebar — fixed overlay on mobile, normal flow on desktop */}
+        <div style={{
+          ...(mobile ? {
+            position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 100,
+            transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+            transition: "transform 0.25s cubic-bezier(.4,0,.2,1)",
+          } : {}),
+          flexShrink: 0,
+        }}>
+          <Sidebar
+            active={activePage}
+            onNav={handleNav}
+            open={mobile ? true : sidebarOpen}
+            onToggle={() => setSidebarOpen(o => !o)}
+            user={user}
+            onLogout={logout}
+            mobile={mobile}
+          />
+        </div>
+
+        {/* Main content area */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          <Topbar
+            page={activePage}
+            user={user}
+            onMenuToggle={() => setSidebarOpen(o => !o)}
+            sidebarOpen={sidebarOpen}
+          />
+          <main style={{
+            flex: 1, overflowY: "auto",
+            padding: mobile ? "14px 12px" : "22px 24px",
+          }}>
             {pages[activePage]}
           </main>
         </div>

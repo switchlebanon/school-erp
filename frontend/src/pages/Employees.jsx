@@ -4,6 +4,21 @@ import { Badge, Card } from "../components/Shared";
 import { api } from "../api/client";
 import EmployeeModal from "./EmployeeModal";
 
+const DEPARTMENTS = [
+  { value: "ALL",              label: "All" },
+  { value: "ADMINISTRATION",   label: "Administration" },
+  { value: "TEACHING_SUPPORT", label: "Teaching Support" },
+  { value: "FINANCE",          label: "Finance" },
+  { value: "FACILITIES",       label: "Facilities" },
+  { value: "IT",               label: "IT" },
+  { value: "SECURITY",         label: "Security" },
+  { value: "TRANSPORT",        label: "Transport" },
+  { value: "HEALTH",           label: "Health" },
+  { value: "OTHER",            label: "Other" },
+];
+
+const DEPT_LABEL = Object.fromEntries(DEPARTMENTS.map(d => [d.value, d.label]));
+
 const statusBadge = (status) => {
   if (status === "ACTIVE")   return { color: C.green, bg: C.greenL, label: "Active" };
   if (status === "ON_LEAVE") return { color: C.amber, bg: C.amberL, label: "On Leave" };
@@ -17,6 +32,7 @@ export default function Employees() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
+  const [activeDept, setActiveDept] = useState("ALL");
 
   const [showModal, setShowModal]     = useState(false);
   const [editEmployee, setEditEmployee] = useState(null);
@@ -45,11 +61,13 @@ export default function Employees() {
     }
   };
 
-  const filtered = employees.filter(e =>
-    !search ||
-    e.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    e.jobTitle?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = employees.filter(e => {
+    const matchesDept = activeDept === "ALL" || e.department === activeDept;
+    const matchesSearch = !search ||
+      e.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      e.jobTitle?.toLowerCase().includes(search.toLowerCase());
+    return matchesDept && matchesSearch;
+  });
 
   return (
     <div>
@@ -71,13 +89,36 @@ export default function Employees() {
         </Card>
       )}
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by name or job title…"
           style={{ width: "100%", maxWidth: 320, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}
         />
+      </div>
+
+      {/* Department filter tabs */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        {DEPARTMENTS.map(d => {
+          const count = d.value === "ALL" ? employees.length : employees.filter(e => e.department === d.value).length;
+          if (d.value !== "ALL" && count === 0) return null;
+          const isActive = activeDept === d.value;
+          return (
+            <button
+              key={d.value}
+              onClick={() => setActiveDept(d.value)}
+              style={{
+                padding: "5px 12px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                background: isActive ? C.accent : C.slateL,
+                color: isActive ? C.white : C.slate,
+                transition: "background 0.15s",
+              }}
+            >
+              {d.label} <span style={{ opacity: 0.75 }}>({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -97,6 +138,11 @@ export default function Employees() {
                   <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{e.user?.name}</div>
                   <div style={{ fontSize: 12, color: C.slate, marginBottom: 4 }}>{e.user?.email}</div>
                   <div style={{ fontSize: 13, color: C.accent, fontWeight: 600 }}>{e.jobTitle}</div>
+                  {e.department && e.department !== "OTHER" && (
+                    <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>
+                      🏢 {DEPT_LABEL[e.department] || e.department}
+                    </div>
+                  )}
                   {e.baseSalary != null && (
                     <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>Base salary: {fmt(e.baseSalary)}/month</div>
                   )}

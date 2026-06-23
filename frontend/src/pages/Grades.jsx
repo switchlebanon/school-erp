@@ -205,9 +205,20 @@ function TeacherGrades() {
 
   // ── Save ──────────────────────────────────────────────────────
   const handleSave = async () => {
-    setSaving(true);
     setError("");
     setSaveMessage("");
+
+    // Validate all scores are in range before saving
+    const invalid = rows.filter(row => {
+      const score = getValue(row, "score");
+      return score !== null && score !== "" && (Number(score) < 0 || Number(score) > 100);
+    });
+    if (invalid.length > 0) {
+      setError(`Score out of range (0–100) for: ${invalid.map(r => r.name).join(", ")}`);
+      return;
+    }
+
+    setSaving(true);
     try {
       const grades = rows.map(row => {
         const score    = getValue(row, "score");
@@ -384,13 +395,15 @@ function TeacherGrades() {
                       </td>
                       <td style={{ padding: "6px 14px", textAlign: "center" }}>
                         <input
-                          type="number" min="0" step="0.5"
+                          type="number" min="0" max="100" step="0.5"
                           value={score ?? ""}
                           onChange={e => updateCell(row.studentId, "score", e.target.value)}
                           placeholder="—"
                           style={{
-                            width: 70, textAlign: "center", border: `1px solid ${C.border}`, borderRadius: 6,
-                            padding: "6px 8px", fontSize: 13, fontWeight: 600, outline: "none",
+                            width: 70, textAlign: "center",
+                            border: `1px solid ${score !== null && score !== "" && (Number(score) < 0 || Number(score) > 100) ? C.red : C.border}`,
+                            borderRadius: 6, padding: "6px 8px", fontSize: 13, fontWeight: 600, outline: "none",
+                            background: score !== null && score !== "" && (Number(score) < 0 || Number(score) > 100) ? C.redL : C.white,
                           }}
                         />
                       </td>

@@ -77,6 +77,18 @@ enum EmployeeStatus {
   INACTIVE
 }
 
+enum Department {
+  ADMINISTRATION
+  TEACHING_SUPPORT
+  FINANCE
+  FACILITIES
+  IT
+  SECURITY
+  TRANSPORT
+  HEALTH
+  OTHER
+}
+
 enum AnnouncementType {
   ACADEMIC
   EVENT
@@ -240,7 +252,8 @@ model Employee {
   user   User           @relation(fields: [userId], references: [id])
   status EmployeeStatus @default(ACTIVE)
 
-  jobTitle   String   // e.g. "Accountant", "Janitor", "IT Support"
+  jobTitle   String
+  department Department @default(OTHER)
   baseSalary Decimal? @db.Decimal(10, 2)
 
   salaryPayments SalaryPayment[]

@@ -8,6 +8,29 @@ function generatePassword() {
   return pw;
 }
 
+function nameToSlug(fullName) {
+  return String(fullName)
+    .trim().toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim().split(/\s+/).filter(Boolean).join(".");
+}
+
+async function buildEmail(fullName, role) {
+  const slug   = nameToSlug(fullName) || "user";
+  const domain = `${role.toLowerCase()}.scube.com`;
+  const base   = `${slug}@${domain}`;
+  const existing = await prisma.user.findUnique({ where: { email: base } });
+  if (!existing) return base;
+  let counter = 2;
+  while (true) {
+    const candidate = `${slug}${counter}@${domain}`;
+    const taken = await prisma.user.findUnique({ where: { email: candidate } });
+    if (!taken) return candidate;
+    counter++;
+  }
+}
+
 const employeeInclude = {
   user: { select: { id: true, name: true, email: true, phone: true, isActive: true } },
 };
@@ -53,27 +76,26 @@ async function getEmployeeById(req, res) {
 }
 
 // POST /api/employees
-// Body: { name, email, phone?, jobTitle, baseSalary?, status? }
+// Body: { name, phone, jobTitle, baseSalary?, status? }
 async function createEmployee(req, res) {
   try {
-    const { name, email, phone, jobTitle, baseSalary, status } = req.body;
+    const { name, phone, jobTitle, department, baseSalary, status } = req.body;
 
-    if (!name || !email || !jobTitle) {
-      return res.status(400).json({ error: "name, email and jobTitle are required" });
+    if (!name || !jobTitle) {
+      return res.status(400).json({ error: "name and jobTitle are required" });
+    }
+    if (!phone || !String(phone).trim()) {
+      return res.status(400).json({ error: "phone is required" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email: String(email).trim().toLowerCase() } });
-    if (existingUser) {
-      return res.status(409).json({ error: "A user with this email already exists" });
-    }
-
+    const email = await buildEmail(name, "employees");
     const plainPassword = generatePassword();
     const hashed = await bcrypt.hash(plainPassword, 10);
 
     const user = await prisma.user.create({
       data: {
         name: String(name).trim(),
-        email: String(email).trim().toLowerCase(),
+        email,
         password: hashed,
         role: "EMPLOYEE",
         phone: phone ? String(phone).trim() : null,
@@ -84,6 +106,7 @@ async function createEmployee(req, res) {
       data: {
         userId: user.id,
         jobTitle: String(jobTitle).trim(),
+        department: department || "OTHER",
         baseSalary: baseSalary !== undefined && baseSalary !== "" ? Number(baseSalary) : null,
         status: status || "ACTIVE",
       },
@@ -102,7 +125,7 @@ async function createEmployee(req, res) {
 async function updateEmployee(req, res) {
   try {
     const id = Number(req.params.id);
-    const { name, phone, jobTitle, baseSalary, status } = req.body;
+    const { name, phone, jobTitle, department, baseSalary, status } = req.body;
 
     const employee = await prisma.employee.findUnique({ where: { id } });
     if (!employee) return res.status(404).json({ error: "Employee not found" });
@@ -121,6 +144,7 @@ async function updateEmployee(req, res) {
       where: { id },
       data: {
         ...(jobTitle !== undefined && { jobTitle: String(jobTitle).trim() }),
+        ...(department !== undefined && { department }),
         ...(baseSalary !== undefined && { baseSalary: baseSalary === "" || baseSalary === null ? null : Number(baseSalary) }),
         ...(status !== undefined && { status }),
       },

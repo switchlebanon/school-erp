@@ -1,11 +1,27 @@
 const bcrypt = require("bcryptjs");
 const prisma = require("../config/db");
 
-function generatePassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let pw = "";
-  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
-  return pw;
+function nameToSlug(fullName) {
+  return String(fullName)
+    .trim().toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim().split(/\s+/).filter(Boolean).join(".");
+}
+
+async function buildEmail(fullName, role) {
+  const slug   = nameToSlug(fullName) || "user";
+  const domain = `${role.toLowerCase()}.scube.com`;
+  const base   = `${slug}@${domain}`;
+  const existing = await prisma.user.findUnique({ where: { email: base } });
+  if (!existing) return base;
+  let counter = 2;
+  while (true) {
+    const candidate = `${slug}${counter}@${domain}`;
+    const taken = await prisma.user.findUnique({ where: { email: candidate } });
+    if (!taken) return candidate;
+    counter++;
+  }
 }
 
 const teacherInclude = {
@@ -57,28 +73,27 @@ async function getTeacherById(req, res) {
 }
 
 // POST /api/teachers
-// Body: { name, email, phone?, status?, subjectIds?: number[] }
-// Creates a TEACHER user account (with a generated password) and the Teacher record.
+// Body: { name, phone, status?, subjectIds?: number[] }
+// Creates a TEACHER user account with auto-generated email and password.
 async function createTeacher(req, res) {
   try {
-    const { name, email, phone, status, subjectIds } = req.body;
+    const { name, phone, status, subjectIds } = req.body;
 
-    if (!name || !email) {
-      return res.status(400).json({ error: "name and email are required" });
+    if (!name) {
+      return res.status(400).json({ error: "name is required" });
+    }
+    if (!phone || !String(phone).trim()) {
+      return res.status(400).json({ error: "phone is required" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email: String(email).trim().toLowerCase() } });
-    if (existingUser) {
-      return res.status(409).json({ error: "A user with this email already exists" });
-    }
-
+    const email = await buildEmail(name, "teachers");
     const plainPassword = generatePassword();
     const hashed = await bcrypt.hash(plainPassword, 10);
 
     const user = await prisma.user.create({
       data: {
         name: String(name).trim(),
-        email: String(email).trim().toLowerCase(),
+        email,
         password: hashed,
         role: "TEACHER",
         phone: phone ? String(phone).trim() : null,

@@ -83,8 +83,8 @@ async function saveGradesBulk(req, res) {
       const numScore = Number(score);
       const numMax   = maxScore != null && maxScore !== "" ? Number(maxScore) : 100;
 
-      if (isNaN(numScore) || numScore < 0) {
-        results.push({ studentId, status: "error", error: "Invalid score" });
+      if (isNaN(numScore) || numScore < 0 || numScore > 100) {
+        results.push({ studentId, status: "error", error: "Score must be between 0 and 100" });
         continue;
       }
 

@@ -10,45 +10,51 @@ function generatePassword() {
   return pw;
 }
 
-// Builds a login email from a student code
-function studentEmailFromCode(studentCode) {
-  const slug = String(studentCode).trim().toLowerCase().replace(/[^a-z0-9]/g, "-");
-  return `${slug}@students.scube.local`;
+/**
+ * Converts a full name into a dot-slug: "Ali Ghoniem" -> "ali.ghoniem"
+ * Accented/Arabic chars are stripped to ASCII; result is always a valid email local-part.
+ */
+function nameToSlug(fullName) {
+  return String(fullName)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(".");
 }
 
 /**
- * Builds a parent login email from guardian name.
- * Format: firstname.lastname@parents.s3.local
- * If taken: firstname.X.lastname@parents.s3.local (X = student's last name first letter)
- *
- * e.g. "Hassan Khalil" -> hassan.khalil@parents.s3.local
- * if taken + student name "Chloe Deeb" -> hassan.d.khalil@parents.s3.local
+ * Builds a unique email for any role.
+ * Format: firstname.lastname@<role>.scube.com
+ * If taken: firstname.lastname2@<role>.scube.com, etc.
  */
-async function buildParentEmail(guardianName, studentName) {
-  const parts = String(guardianName).trim().toLowerCase().split(/\s+/).map(p => p.replace(/[^a-z]/g, ""));
-  const first = parts[0] || "parent";
-  const last  = parts[parts.length - 1] || "user";
+async function buildEmail(fullName, role) {
+  const slug   = nameToSlug(fullName) || "user";
+  const domain = `${role.toLowerCase()}.scube.com`;
+  const base   = `${slug}@${domain}`;
 
-  const baseEmail = `${first}.${last}@parents.s3.local`;
-  const existing  = await prisma.user.findUnique({ where: { email: baseEmail } });
-  if (!existing) return baseEmail;
+  const existing = await prisma.user.findUnique({ where: { email: base } });
+  if (!existing) return base;
 
-  // Add student's last name initial as middle disambiguator
-  const studentParts = String(studentName || "").trim().toLowerCase().split(/\s+/);
-  const studentLastInitial = (studentParts[studentParts.length - 1] || "x")[0];
-  const altEmail = `${first}.${studentLastInitial}.${last}@parents.s3.local`;
-
-  const existingAlt = await prisma.user.findUnique({ where: { email: altEmail } });
-  if (!existingAlt) return altEmail;
-
-  // Last resort: add a counter
   let counter = 2;
   while (true) {
-    const countedEmail = `${first}.${last}${counter}@parents.s3.local`;
-    const existingCounted = await prisma.user.findUnique({ where: { email: countedEmail } });
-    if (!existingCounted) return countedEmail;
+    const candidate = `${slug}${counter}@${domain}`;
+    const taken = await prisma.user.findUnique({ where: { email: candidate } });
+    if (!taken) return candidate;
     counter++;
   }
+}
+
+async function buildStudentEmail(studentName) {
+  return buildEmail(studentName, "students");
+}
+
+async function buildParentEmail(guardianName) {
+  return buildEmail(guardianName, "parents");
 }
 
 /**
@@ -79,7 +85,7 @@ async function findOrCreateParentAccount(guardianName, guardianPhone, student) {
   }
 
   // No existing parent found — create a new account
-  const email = await buildParentEmail(guardianName, student.name);
+  const email = await buildParentEmail(guardianName);
   const plainPassword = generatePassword();
   const hashed = await bcrypt.hash(plainPassword, 10);
 
@@ -105,7 +111,7 @@ async function findOrCreateParentAccount(guardianName, guardianPhone, student) {
  * Creates a STUDENT-role user account for a given student record.
  */
 async function createStudentAccount(student) {
-  const email = studentEmailFromCode(student.studentCode);
+  const email = await buildStudentEmail(student.name);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return null;
@@ -522,7 +528,7 @@ module.exports = {
   deleteStudent,
   bulkImportStudents,
   createStudentAccount,
-  studentEmailFromCode,
+
   getStudentAccount,
   createAccountForStudent,
   resetStudentPassword,

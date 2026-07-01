@@ -1,6 +1,6 @@
-// ════════════════════════════════════════════════════════════════
-// S³ ERP — Database Schema
-// ════════════════════════════════════════════════════════════════
+// ================================================================
+// S³ ERP — Complete Database Schema v3
+// ================================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -11,7 +11,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────
+// ─── Enums ───────────────────────────────────────────────────────
 
 enum Role {
   ADMIN
@@ -111,14 +111,45 @@ enum Weekday {
   SUN
 }
 
-// ─── Core Identity ──────────────────────────────────────────────
+enum PromotionStatus {
+  PROMOTED
+  RETAINED
+  TRANSFERRED
+  GRADUATED
+}
 
-// One login account. Linked optionally to a Teacher, Student, or
-// used as a Guardian (Parent) account linked to one or more students.
+enum MessageFolder {
+  INBOX
+  SENT
+  ARCHIVED
+}
+
+enum ConstraintType {
+  UNAVAILABLE
+  NO_LAST_PERIOD
+  NO_FIRST_PERIOD
+  LATE_START
+  EARLY_FINISH
+  BEFORE_BREAK_ONLY
+  AFTER_BREAK_ONLY
+  DAY_OFF
+  MAX_PER_DAY
+  MAX_CONSECUTIVE
+  MIN_REST
+  PREFER_MORNING
+  PREFER_AFTERNOON
+  BALANCED_DAYS
+  MORNING_SUBJECT
+  AFTERNOON_SUBJECT
+  PREFERRED_DAY
+}
+
+// ─── Core Identity ───────────────────────────────────────────────
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   // bcrypt hash
+  password  String
   name      String
   role      Role
   phone     String?
@@ -127,86 +158,87 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
-  teacher          Teacher?
-  employee         Employee?
-  salaryPayments   SalaryPayment[] @relation("SalaryPaymentUser")
-  studentsAsGuardian Student[] @relation("GuardianStudents")
-  studentAccount     Student?  @relation("StudentAccount")
-  announcements    Announcement[] @relation("AnnouncementAuthor")
-  attendanceMarks  Attendance[]   @relation("AttendanceMarkedBy")
-  expensesRecorded Expense[]      @relation("ExpenseRecordedBy")
+  teacher            Teacher?
+  employee           Employee?
+  salaryPayments     SalaryPayment[]    @relation("SalaryPaymentUser")
+  studentsAsGuardian Student[]          @relation("GuardianStudents")
+  studentAccount     Student?           @relation("StudentAccount")
+  announcements      Announcement[]     @relation("AnnouncementAuthor")
+  attendanceMarks    Attendance[]       @relation("AttendanceMarkedBy")
+  expensesRecorded   Expense[]          @relation("ExpenseRecordedBy")
+  sentMessages       Message[]          @relation("SentMessages")
+  receivedMessages   MessageRecipient[] @relation("ReceivedMessages")
 
   @@map("users")
 }
 
-// ─── Academic Structure ─────────────────────────────────────────
+// ─── Academic Structure ──────────────────────────────────────────
 
-// e.g. "Grade 9", "Grade 10"
 model GradeLevel {
   id       Int       @id @default(autoincrement())
-  name     String    @unique // "Grade 9"
-  order    Int       // for sorting: 9, 10, 11...
+  name     String    @unique
+  order    Int
   sections Section[]
 
   @@map("grade_levels")
 }
 
-// e.g. Section "A" of Grade 9
 model Section {
   id           Int        @id @default(autoincrement())
-  name         String     // "A", "B", "C"
+  name         String
   gradeLevelId Int
   gradeLevel   GradeLevel @relation(fields: [gradeLevelId], references: [id])
 
-  students        Student[]
-  timetableEntries TimetableEntry[]
+  students            Student[]
+  timetableEntries    TimetableEntry[]
+  timetableSlots      TimetableSlot[]       @relation("TimetableSlots")
+  classScheduleConfig ClassScheduleConfig?  @relation("ClassScheduleConfig")
 
   @@unique([gradeLevelId, name])
   @@map("sections")
 }
 
-// e.g. "Mathematics", "Physics"
 model Subject {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  code  String? @unique // e.g. "MATH101"
-  color String? // hex color used for UI (timetable, charts)
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  code  String? @unique
+  color String?
 
-  teacherSubjects TeacherSubject[]
+  teacherSubjects  TeacherSubject[]
   timetableEntries TimetableEntry[]
   gradeRecords     GradeRecord[]
+  grades           Grade[]
+  timetableSlots   TimetableSlot[] @relation("TimetableSlotSubject")
 
   @@map("subjects")
 }
 
-// ─── People ─────────────────────────────────────────────────────
+// ─── People ──────────────────────────────────────────────────────
 
 model Student {
   id             Int           @id @default(autoincrement())
-  studentCode    String        @unique // e.g. "STU-2026-001"
+  studentCode    String        @unique
   name           String
   dateOfBirth    DateTime?
   enrollmentDate DateTime      @default(now())
   status         StudentStatus @default(ACTIVE)
-
-  // Guardian contact info (stored directly for quick access)
-  guardianName   String?       // e.g. "Hassan Khalil"
-  guardianPhone  String?       // e.g. "+96171234567" (international format for WhatsApp)
+  guardianName   String?
+  guardianPhone  String?
 
   sectionId Int
   section   Section @relation(fields: [sectionId], references: [id])
 
   guardianId Int?
-  guardian   User?   @relation("GuardianStudents", fields: [guardianId], references: [id])
+  guardian   User? @relation("GuardianStudents", fields: [guardianId], references: [id])
 
-  // The student's own login account (role: STUDENT), if one has been created
   userId Int?  @unique
   user   User? @relation("StudentAccount", fields: [userId], references: [id])
 
-  attendances   Attendance[]
-  gradeRecords  GradeRecord[]
-  feeInvoices   FeeInvoice[]
+  attendances  Attendance[]
+  gradeRecords GradeRecord[]
+  feeInvoices  FeeInvoice[]
+  grades       Grade[]
+  promotions   StudentPromotion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -215,15 +247,18 @@ model Student {
 }
 
 model Teacher {
-  id     Int           @id @default(autoincrement())
-  userId Int           @unique
-  user   User          @relation(fields: [userId], references: [id])
-  status TeacherStatus @default(ACTIVE)
-
-  baseSalary Decimal? @db.Decimal(10, 2) // monthly base salary, optional
+  id              Int           @id @default(autoincrement())
+  userId          Int           @unique
+  user            User          @relation(fields: [userId], references: [id])
+  status          TeacherStatus @default(ACTIVE)
+  baseSalary      Decimal?      @db.Decimal(10, 2)
+  maxHoursPerWeek Int?
 
   subjects         TeacherSubject[]
   timetableEntries TimetableEntry[]
+  grades           Grade[]
+  timetableSlots   TimetableSlot[]     @relation("TimetableSlotTeacher")
+  constraints      TeacherConstraint[] @relation("TeacherConstraints")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,7 +266,6 @@ model Teacher {
   @@map("teachers")
 }
 
-// Many-to-many: which subjects + sections a teacher is assigned to
 model TeacherSubject {
   id        Int     @id @default(autoincrement())
   teacherId Int
@@ -243,9 +277,8 @@ model TeacherSubject {
   @@map("teacher_subjects")
 }
 
-// ─── Staff / Payroll ────────────────────────────────────────────
+// ─── Staff / Payroll ─────────────────────────────────────────────
 
-// Non-teaching staff (admin, accountant, janitor, etc.)
 model Employee {
   id     Int            @id @default(autoincrement())
   userId Int            @unique
@@ -254,7 +287,7 @@ model Employee {
 
   jobTitle   String
   department Department @default(OTHER)
-  baseSalary Decimal? @db.Decimal(10, 2)
+  baseSalary Decimal?   @db.Decimal(10, 2)
 
   salaryPayments SalaryPayment[]
 
@@ -264,31 +297,27 @@ model Employee {
   @@map("employees")
 }
 
-// A salary payment for a given staff member (Teacher OR Employee) for a given month.
-// Linked via userId so it works for both Teacher and Employee accounts.
 model SalaryPayment {
-  id     Int @id @default(autoincrement())
+  id     Int  @id @default(autoincrement())
   userId Int
   user   User @relation("SalaryPaymentUser", fields: [userId], references: [id])
 
   employeeId Int?
   employee   Employee? @relation(fields: [employeeId], references: [id])
 
-  month Int // 1-12
+  month Int
   year  Int
 
-  baseAmount Decimal @db.Decimal(10, 2)
-  bonus      Decimal @default(0) @db.Decimal(10, 2)
-  bonusNote  String?
-  deduction  Decimal @default(0) @db.Decimal(10, 2)
+  baseAmount    Decimal @db.Decimal(10, 2)
+  bonus         Decimal @default(0) @db.Decimal(10, 2)
+  bonusNote     String?
+  deduction     Decimal @default(0) @db.Decimal(10, 2)
   deductionNote String?
+  netAmount     Decimal @db.Decimal(10, 2)
 
-  // netAmount = baseAmount + bonus - deduction (computed on save)
-  netAmount Decimal @db.Decimal(10, 2)
-
-  status  SalaryPaymentStatus @default(PENDING)
+  status   SalaryPaymentStatus @default(PENDING)
   paidDate DateTime?
-  note    String?
+  note     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,19 +326,18 @@ model SalaryPayment {
   @@map("salary_payments")
 }
 
-// General school operating expenses (utilities, supplies, maintenance, etc.)
 model Expense {
   id Int @id @default(autoincrement())
 
-  category    ExpenseCategory @default(OTHER)
-  description String
-  amount      Decimal         @db.Decimal(10, 2)
-  vendor      String?         // who was paid, e.g. "Electricite du Liban"
-  paymentMethod String?       // e.g. "Cash", "Bank Transfer", "Check"
-  status      ExpenseStatus   @default(PENDING)
-  expenseDate DateTime        // when the expense was incurred / due
-  paidDate    DateTime?
-  note        String?
+  category      ExpenseCategory @default(OTHER)
+  description   String
+  amount        Decimal         @db.Decimal(10, 2)
+  vendor        String?
+  paymentMethod String?
+  status        ExpenseStatus   @default(PENDING)
+  expenseDate   DateTime
+  paidDate      DateTime?
+  note          String?
 
   recordedById Int?
   recordedBy   User? @relation("ExpenseRecordedBy", fields: [recordedById], references: [id])
@@ -320,7 +348,7 @@ model Expense {
   @@map("expenses")
 }
 
-// ─── Attendance ─────────────────────────────────────────────────
+// ─── Attendance ──────────────────────────────────────────────────
 
 model Attendance {
   id        Int              @id @default(autoincrement())
@@ -328,19 +356,19 @@ model Attendance {
   student   Student          @relation(fields: [studentId], references: [id])
   date      DateTime         @db.Date
   status    AttendanceStatus @default(PRESENT)
-  reason    String?          // optional note, e.g. "Sick leave", "Family emergency" — used mainly for EXCUSED
+  reason    String?
 
   markedById Int?
   markedBy   User? @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
 
   createdAt DateTime @default(now())
 
-  @@unique([studentId, date]) // one record per student per day
+  @@unique([studentId, date])
   @@index([date])
   @@map("attendance")
 }
 
-// ─── Grades / Exams ─────────────────────────────────────────────
+// ─── Grades / Exams ──────────────────────────────────────────────
 
 model GradeRecord {
   id        Int     @id @default(autoincrement())
@@ -349,8 +377,8 @@ model GradeRecord {
   subjectId Int
   subject   Subject @relation(fields: [subjectId], references: [id])
 
-  term  String // e.g. "Term 1", "Term 2", "Final"
-  score Float  // 0-100
+  term     String
+  score    Float
   maxScore Float @default(100)
 
   createdAt DateTime @default(now())
@@ -360,20 +388,20 @@ model GradeRecord {
   @@map("grade_records")
 }
 
-// ─── Fees / Finance ─────────────────────────────────────────────
+// ─── Fees / Finance ──────────────────────────────────────────────
 
 model FeeInvoice {
   id        Int       @id @default(autoincrement())
   studentId Int
   student   Student   @relation(fields: [studentId], references: [id])
 
-  description    String    // e.g. "Term 2 Tuition"
-  amount         Decimal   @db.Decimal(10, 2)  // total amount due
-  dueDate        DateTime  @db.Date
-  status         FeeStatus @default(PENDING)   // auto-updated based on payments
-  totalPaid      Decimal   @default(0) @db.Decimal(10, 2) // running sum of payments
+  description String
+  amount      Decimal   @db.Decimal(10, 2)
+  dueDate     DateTime  @db.Date
+  status      FeeStatus @default(PENDING)
+  totalPaid   Decimal   @default(0) @db.Decimal(10, 2)
 
-  payments  Payment[]
+  payments Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -382,41 +410,40 @@ model FeeInvoice {
   @@map("fee_invoices")
 }
 
-// Each row = one installment/payment against a FeeInvoice
 model Payment {
-  id          Int        @id @default(autoincrement())
-  invoiceId   Int
-  invoice     FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id        Int        @id @default(autoincrement())
+  invoiceId Int
+  invoice   FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
-  amount      Decimal  @db.Decimal(10, 2)
-  paidDate    DateTime @default(now()) @db.Date
-  note        String?  // e.g. "Cash", "Bank transfer", "OMT"
+  amount   Decimal  @db.Decimal(10, 2)
+  paidDate DateTime @default(now()) @db.Date
+  note     String?
 
   createdAt DateTime @default(now())
 
   @@map("payments")
 }
 
-// ─── Timetable ──────────────────────────────────────────────────
+// ─── Timetable (original) ────────────────────────────────────────
 
 model TimetableEntry {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   sectionId Int
-  section   Section @relation(fields: [sectionId], references: [id])
+  section   Section  @relation(fields: [sectionId], references: [id])
   subjectId Int
-  subject   Subject @relation(fields: [subjectId], references: [id])
+  subject   Subject  @relation(fields: [subjectId], references: [id])
   teacherId Int?
   teacher   Teacher? @relation(fields: [teacherId], references: [id])
 
   day       Weekday
-  startTime String  // "07:30"
-  endTime   String  // "08:15"
+  startTime String
+  endTime   String
 
   @@unique([sectionId, day, startTime])
   @@map("timetable_entries")
 }
 
-// ─── Announcements ──────────────────────────────────────────────
+// ─── Announcements ───────────────────────────────────────────────
 
 model Announcement {
   id       Int              @id @default(autoincrement())
@@ -426,9 +453,177 @@ model Announcement {
   priority Priority         @default(MEDIUM)
 
   authorId Int?
-  author   User?   @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  author   User? @relation("AnnouncementAuthor", fields: [authorId], references: [id])
 
   createdAt DateTime @default(now())
 
   @@map("announcements")
+}
+
+// ─── Academic Year & Terms ───────────────────────────────────────
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(false)
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  terms      Term[]
+  promotions StudentPromotion[]
+}
+
+model Term {
+  id             String       @id @default(cuid())
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  grades Grade[]
+
+  @@unique([academicYearId, name])
+}
+
+model Grade {
+  id          String   @id @default(cuid())
+  studentId   Int
+  student     Student  @relation(fields: [studentId], references: [id])
+  subjectId   Int
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  termId      String
+  term        Term     @relation(fields: [termId], references: [id])
+  teacherId   Int?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+
+  score       Float
+  letterGrade String?
+  comment     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, subjectId, termId])
+}
+
+model StudentPromotion {
+  id             String          @id @default(cuid())
+  studentId      Int
+  student        Student         @relation(fields: [studentId], references: [id])
+  academicYearId String
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id])
+  fromGradeLevel String
+  toGradeLevel   String
+  fromClassId    String
+  toClassId      String?
+  promotedAt     DateTime        @default(now())
+  promotedBy     String?
+  status         PromotionStatus @default(PROMOTED)
+  notes          String?
+}
+
+// ─── Messaging ───────────────────────────────────────────────────
+
+model Message {
+  id        String   @id @default(cuid())
+  senderId  Int
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  recipients MessageRecipient[]
+}
+
+model MessageRecipient {
+  id          String        @id @default(cuid())
+  messageId   String
+  message     Message       @relation(fields: [messageId], references: [id])
+  recipientId Int
+  recipient   User          @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  isRead      Boolean       @default(false)
+  readAt      DateTime?
+  isDeleted   Boolean       @default(false)
+  folder      MessageFolder @default(INBOX)
+}
+
+// ─── Auto Timetable ──────────────────────────────────────────────
+
+model TimetableConfig {
+  id               String   @id @default(cuid())
+  name             String
+  academicYearId   String?
+  daysPerWeek      Int      @default(5)
+  periodsPerDay    Int      @default(7)
+  periodDuration   Int      @default(45)
+  startTime        String   @default("07:30")
+  breakAfterPeriod Int?
+  isActive         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  slots        TimetableSlot[]
+  constraints  TeacherConstraint[]
+  classConfigs ClassScheduleConfig[]
+}
+
+model TimetableSlot {
+  id       String @id @default(cuid())
+  configId String
+  config   TimetableConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  sectionId Int
+  section   Section @relation("TimetableSlots", fields: [sectionId], references: [id])
+
+  subjectId Int
+  subject   Subject @relation("TimetableSlotSubject", fields: [subjectId], references: [id])
+
+  teacherId Int
+  teacher   Teacher @relation("TimetableSlotTeacher", fields: [teacherId], references: [id])
+
+  day      Int
+  period   Int
+  isDouble Boolean @default(false)
+  isLocked Boolean @default(false)
+
+  @@unique([configId, sectionId, day, period])
+  @@unique([configId, teacherId, day, period])
+}
+
+model TeacherConstraint {
+  id       String @id @default(cuid())
+  configId String
+  config   TimetableConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  teacherId Int
+  teacher   Teacher @relation("TeacherConstraints", fields: [teacherId], references: [id])
+
+  type   ConstraintType
+  day    Int?
+  period Int?
+  value  String?
+  note   String?
+
+  @@map("teacher_constraints")
+}
+
+model ClassScheduleConfig {
+  id              String          @id @default(cuid())
+  sectionId       Int             @unique
+  section         Section         @relation("ClassScheduleConfig", fields: [sectionId], references: [id])
+  configId        String
+  timetableConfig TimetableConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  periodsPerDay     Int    @default(7)
+  sessionDuration   Int    @default(45)
+  breakAfterPeriods String @default("4")
+  breakDurations    String @default("15")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("class_schedule_configs")
 }

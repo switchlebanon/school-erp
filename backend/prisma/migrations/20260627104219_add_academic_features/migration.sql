@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "Department" AS ENUM ('ADMINISTRATION', 'TEACHING_SUPPORT', 'FINANCE', 'FACILITIES', 'IT', 'SECURITY', 'TRANSPORT', 'HEALTH', 'OTHER');
+
+-- AlterTable
+ALTER TABLE "employees" ADD COLUMN     "department" "Department" NOT NULL DEFAULT 'OTHER';

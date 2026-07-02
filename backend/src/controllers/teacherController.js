@@ -23,6 +23,14 @@ async function buildEmail(fullName, role) {
     counter++;
   }
 }
+function generatePassword() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let password = "";
+  for (let i = 0; i < 10; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
 
 const teacherInclude = {
   user: { select: { id: true, name: true, email: true, phone: true, isActive: true } },
